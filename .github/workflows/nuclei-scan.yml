@@ -1,0 +1,35 @@
+name: "Nuclei Engine 24/7 Pro"
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *'
+
+jobs:
+  nuclei-scan:
+    runs-on: ubuntu-latest
+    container:
+      image: projectdiscovery/nuclei:latest # Dùng Docker chính chủ siêu ổn định
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Multi-Thread Parallel Scanning
+      run: |
+        # ĐẲNG CẤP: Chạy song song tốc độ cao ngay bên trong Docker Container chính chủ
+        nuclei -list targets.txt \
+               -c 30 \
+               -rate-limit 150 \
+               -bulk-size 30 \
+               -scan-all-ips \
+               -silent \
+               -o results.txt
+
+    - name: Luu va dong goi ket qua
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: nuclei-vulnerability-report
+        path: results.txt
+        retention-days: 7
