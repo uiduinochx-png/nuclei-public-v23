@@ -19,8 +19,8 @@ on:
 jobs:
   ultimate-scan:
     runs-on: ubuntu-latest
-    container:
-      image: projectdiscovery/nuclei:latest
+    # KHÔNG DÙNG CONTAINER NỮA - DÙNG UBUNTU NATIVE
+    # image: projectdiscovery/nuclei:latest
 
     steps:
       - name: 📥 TẢI MÃ NGUỒN
@@ -28,29 +28,44 @@ jobs:
 
       - name: 📦 CÀI ĐẶT CÔNG CỤ
         run: |
-          apt-get update -qq && apt-get install -y -qq \
+          # Cập nhật và cài đặt các gói cần thiết
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
             jq curl git python3 python3-pip \
             massdns dnsrecon dnsenum \
             nmap ffuf \
-            && rm -rf /var/lib/apt/lists/*
+            && sudo rm -rf /var/lib/apt/lists/*
           
-          pip install -q requests beautifulsoup4 lxml
+          # Cài nuclei
+          curl -s https://api.github.com/repos/projectdiscovery/nuclei/releases/latest | \
+            grep "browser_download_url.*linux-amd64.zip" | cut -d '"' -f 4 | wget -qi -
+          unzip -q nuclei_*_linux_amd64.zip
+          sudo mv nuclei /usr/local/bin/
+          sudo chmod +x /usr/local/bin/nuclei
+          rm nuclei_*_linux_amd64.zip
+          
+          # Cài các công cụ bổ sung
+          go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest || true
+          go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest || true
           
           nuclei -update-templates -silent
           nuclei -templates-version
           
           mkdir -p /tmp/ultimate-templates
-          git clone --depth 1 -q https://github.com/geeknik/nuclei-templates.git /tmp/ultimate-templates/geeknik 2>/dev/null || true
-          git clone --depth 1 -q https://github.com/notnotnotveg/nuclei-templates.git /tmp/ultimate-templates/extra 2>/dev/null || true
-          git clone --depth 1 -q https://github.com/random-robbie/nuclei-templates.git /tmp/ultimate-templates/random 2>/dev/null || true
-          git clone --depth 1 -q https://github.com/projectdiscovery/nuclei-templates.git /tmp/ultimate-templates/official 2>/dev/null || true
+          
+          echo "📥 ĐANG TẢI TEMPLATE..."
+          git clone --depth 1 -q https://github.com/geeknik/nuclei-templates.git /tmp/ultimate-templates/geeknik 2>/dev/null || echo "⚠️ Không clone được geeknik"
+          git clone --depth 1 -q https://github.com/notnotnotveg/nuclei-templates.git /tmp/ultimate-templates/extra 2>/dev/null || echo "⚠️ Không clone được extra"
+          git clone --depth 1 -q https://github.com/random-robbie/nuclei-templates.git /tmp/ultimate-templates/random 2>/dev/null || echo "⚠️ Không clone được random"
+          git clone --depth 1 -q https://github.com/projectdiscovery/nuclei-templates.git /tmp/ultimate-templates/official 2>/dev/null || echo "⚠️ Không clone được official"
+          
+          echo "✅ CÀI ĐẶT HOÀN TẤT!"
 
       - name: 👑 LẤY 20 WEB TỪ NỀN TẢNG LỚN
         id: get_targets
         run: |
           echo "🌌 CHỦ NHÂN VŨ TRỤ ĐANG QUÉT VŨ TRỤ TÌM MỤC TIÊU..."
           
-          # Tạo file lịch sử
           if [ ! -f history.json ]; then
               echo '{"scanned": [], "high_value": []}' > history.json
           fi
@@ -59,7 +74,6 @@ jobs:
           import json, re, requests, random, time
           from bs4 import BeautifulSoup
           
-          # Đọc lịch sử
           try:
               with open('history.json', 'r') as f:
                   history = json.load(f)
@@ -77,10 +91,9 @@ jobs:
           print("="*70)
           
           # ============================================
-          # 1. WEB GIÁ TRỊ CAO - LUÔN CÓ TRONG DANH SÁCH
+          # 1. WEB GIÁ TRỊ CAO - LUÔN CÓ
           # ============================================
           high_value_websites = [
-              # CRITICAL - Lỗi nghiêm trọng, tiền thưởng cực cao
               ('wordpress.com', 'CRITICAL - SQLi/RCE plugin'),
               ('joomla.org', 'CRITICAL - SQLi/RCE extension'),
               ('drupal.org', 'CRITICAL - RCE/SA-CORE'),
@@ -107,6 +120,19 @@ jobs:
               ('airbnb.com', 'CRITICAL - Reservation logic'),
               ('reddit.com', 'CRITICAL - API logic'),
               ('discord.com', 'CRITICAL - API bypass'),
+              ('telegram.org', 'CRITICAL - Bot takeover'),
+              ('slack.com', 'CRITICAL - Integration bypass'),
+              ('square.com', 'CRITICAL - Payment logic'),
+              ('compound.finance', 'CRITICAL - Lending logic'),
+              ('gmx.io', 'CRITICAL - Trading logic'),
+              ('morpho.org', 'CRITICAL - Lending logic'),
+              ('injective.com', 'CRITICAL - Trading logic'),
+              ('near.org', 'CRITICAL - Blockchain logic'),
+              ('aptosfoundation.org', 'CRITICAL - Blockchain logic'),
+              ('pyth.network', 'CRITICAL - Oracle logic'),
+              ('sky.money', 'CRITICAL - Stablecoin logic'),
+              ('layerzero.com', 'CRITICAL - Cross-chain logic'),
+              ('wormhole.com', 'CRITICAL - Cross-chain logic'),
           ]
           
           high_value_domains = [d for d, _ in high_value_websites]
@@ -132,7 +158,7 @@ jobs:
                   soup = BeautifulSoup(r.text, 'html.parser')
                   count = 0
                   for link in soup.find_all('a', href=True):
-                      if count >= 30:
+                      if count >= 20:
                           break
                       href = link['href']
                       if '/programs/' in href and 'hackerone.com' not in href:
@@ -163,7 +189,7 @@ jobs:
                   soup = BeautifulSoup(r.text, 'html.parser')
                   count = 0
                   for item in soup.find_all(['a', 'div'], class_=True):
-                      if count >= 30:
+                      if count >= 20:
                           break
                       text = item.text.strip()
                       if '.' in text and len(text) > 5 and ' ' not in text:
@@ -192,7 +218,7 @@ jobs:
                   soup = BeautifulSoup(r.text, 'html.parser')
                   count = 0
                   for link in soup.find_all('a', href=True):
-                      if count >= 20:
+                      if count >= 15:
                           break
                       href = link['href']
                       if '/bounty/' in href and 'immunefi.com' not in href:
@@ -214,35 +240,7 @@ jobs:
               print(f"⚠️ Lỗi Immunefi: {e}")
           
           # ============================================
-          # 5. THÊM WEB TỪ DANH SÁCH GIÁ TRỊ CAO
-          # ============================================
-          more_high_value = [
-              ('compound.finance', 'Compound - $10M+ bounty'),
-              ('gmx.io', 'GMX - $5M bounty'),
-              ('morpho.org', 'Morpho - $2.5M bounty'),
-              ('injective.com', 'Injective - $500K bounty'),
-              ('near.org', 'NEAR - New'),
-              ('aptosfoundation.org', 'Aptos - New'),
-              ('pyth.network', 'Pyth Network'),
-              ('sky.money', 'Sky/MakerDAO - $10M'),
-              ('layerzero.com', 'LayerZero - $15M'),
-              ('wormhole.com', 'Wormhole - $10M'),
-          ]
-          
-          for domain, desc in more_high_value:
-              if domain not in seen:
-                  seen.add(domain)
-                  all_targets.append({
-                      'domain': domain,
-                      'source': desc,
-                      'type': 'HighValue',
-                      'priority': 1
-                  })
-                  if domain not in history['high_value']:
-                      history['high_value'].append(domain)
-          
-          # ============================================
-          # 6. CHỌN 20 WEB TỐT NHẤT
+          # 5. CHỌN 20 WEB TỐT NHẤT
           # ============================================
           print("\n👑 CHỌN 20 WEB NHIỀU LỖI GIÁ TRỊ NHẤT...")
           
@@ -250,24 +248,22 @@ jobs:
           priority_2 = [t for t in all_targets if t['priority'] == 2]
           priority_3 = [t for t in all_targets if t['priority'] == 3]
           
-          # Ưu tiên web giá trị cao + web mới từ nền tảng
           random.shuffle(priority_1)
           random.shuffle(priority_2)
           random.shuffle(priority_3)
           
-          # Chọn 20 web: 12 web giá trị cao + 5 web3 + 3 bug bounty
           selected = priority_1[:12] + priority_2[:5] + priority_3[:3]
           
-          # Nếu thiếu, bổ sung
           if len(selected) < 20:
-              selected += priority_2[:20-len(selected)]
+              remaining = 20 - len(selected)
+              selected += priority_2[:remaining]
           if len(selected) < 20:
-              selected += priority_3[:20-len(selected)]
+              remaining = 20 - len(selected)
+              selected += priority_3[:remaining]
           
           random.shuffle(selected)
           selected = selected[:20]
           
-          # Cập nhật lịch sử
           for t in selected:
               if t['domain'] not in history['scanned']:
                   history['scanned'].append(t['domain'])
@@ -275,7 +271,6 @@ jobs:
           with open('history.json', 'w') as f:
               json.dump(history, f, indent=2)
           
-          # Ghi file
           with open('targets.txt', 'w') as f:
               for t in selected:
                   domain = t['domain']
@@ -283,7 +278,6 @@ jobs:
                       domain = 'https://' + domain
                   f.write(f"{domain}  # {t['source']}\n")
           
-          # In kết quả
           print("\n" + "="*70)
           print("👑 20 WEB NHIỀU LỖI GIÁ TRỊ NHẤT:")
           print("="*70)
@@ -301,7 +295,6 @@ jobs:
           
           python3 target_finder.py
           
-          # Kiểm tra file
           if [ ! -s targets.txt ]; then
               echo "⚠️ KHÔNG TÌM THẤY MỤC TIÊU! DÙNG DANH SÁCH DỰ PHÒNG..."
               cat > targets.txt << 'EOF'
@@ -340,6 +333,7 @@ jobs:
         run: |
           echo "⏰ BẮT ĐẦU: $(date)"
           echo "🎯 MỤC TIÊU: ${{ env.target_count }}"
+          echo "📊 MỨC ĐỘ: ${{ github.event.inputs.severity_level || 'critical,high,medium' }}"
           
           nuclei \
             -list targets.txt \
