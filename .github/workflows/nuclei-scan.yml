@@ -1,4 +1,4 @@
-name: "👑 CHỦ NHÂN VŨ TRỤ - SĂN LỖI CRITICAL"
+name: "👑 CHỦ NHÂN VŨ TRỤ - SĂN LỖI GIÁ TRỊ"
 
 on:
   workflow_dispatch:
@@ -6,23 +6,15 @@ on:
       severity_level:
         description: '📊 MỨC ĐỘ LỖ HỔNG'
         required: false
-        default: 'critical,high'
+        default: 'critical,high,medium'
         type: choice
         options:
           - critical,high
           - critical,high,medium
           - critical,high,medium,low
           - critical,high,medium,low,info
-      target_selection:
-        description: '🎯 CHỌN MỤC TIÊU'
-        required: false
-        default: 'critical_only'
-        type: choice
-        options:
-          - critical_only
-          - all
   schedule:
-    - cron: '0 */2 * * *'
+    - cron: '0 */3 * * *'
 
 jobs:
   ultimate-scan:
@@ -42,7 +34,7 @@ jobs:
             nmap ffuf \
             && rm -rf /var/lib/apt/lists/*
           
-          pip install -q requests beautifulsoup4
+          pip install -q requests beautifulsoup4 lxml
           
           nuclei -update-templates -silent
           nuclei -templates-version
@@ -53,42 +45,42 @@ jobs:
           git clone --depth 1 -q https://github.com/random-robbie/nuclei-templates.git /tmp/ultimate-templates/random 2>/dev/null || true
           git clone --depth 1 -q https://github.com/projectdiscovery/nuclei-templates.git /tmp/ultimate-templates/official 2>/dev/null || true
 
-      - name: 👑 LẤY 20 WEB CÓ LỖI CRITICAL NHIỀU NHẤT
+      - name: 👑 LẤY 20 WEB TỪ NỀN TẢNG LỚN
         id: get_targets
         run: |
-          echo "🚨 CHỦ NHÂN VŨ TRỤ ĐANG TÌM WEB CÓ LỖI CRITICAL..."
+          echo "🌌 CHỦ NHÂN VŨ TRỤ ĐANG QUÉT VŨ TRỤ TÌM MỤC TIÊU..."
           
+          # Tạo file lịch sử
           if [ ! -f history.json ]; then
-              echo '{"used": [], "critical_bug": []}' > history.json
+              echo '{"scanned": [], "high_value": []}' > history.json
           fi
           
-          cat > critical_hunter.py << 'PYEOF'
+          cat > target_finder.py << 'PYEOF'
           import json, re, requests, random, time
           from bs4 import BeautifulSoup
-          from datetime import datetime
           
+          # Đọc lịch sử
           try:
               with open('history.json', 'r') as f:
                   history = json.load(f)
           except:
-              history = {'used': [], 'critical_bug': []}
+              history = {'scanned': [], 'high_value': []}
           
           all_targets = []
           seen = set()
           
           print("="*70)
-          print("🚨 CHỦ NHÂN VŨ TRỤ - SĂN LỖI CRITICAL")
+          print("👑 CHỦ NHÂN VŨ TRỤ - TÌM WEB NHIỀU LỖI GIÁ TRỊ")
           print("="*70)
-          print(f"📊 WEB ĐÃ QUÉT: {len(history['used'])}")
-          print(f"📊 WEB CÓ LỖI CRITICAL: {len(history['critical_bug'])}")
+          print(f"📊 WEB ĐÃ QUÉT: {len(history['scanned'])}")
+          print(f"📊 WEB GIÁ TRỊ CAO: {len(history['high_value'])}")
           print("="*70)
           
           # ============================================
-          # 1. WEB CÓ NHIỀU LỖI CRITICAL NHẤT
+          # 1. WEB GIÁ TRỊ CAO - LUÔN CÓ TRONG DANH SÁCH
           # ============================================
-          print("\n🔍 LẤY WEB CÓ NHIỀU LỖI CRITICAL...")
-          critical_bug_websites = [
-              # CRITICAL: Lỗi SQLi, RCE, LFI, Command Injection
+          high_value_websites = [
+              # CRITICAL - Lỗi nghiêm trọng, tiền thưởng cực cao
               ('wordpress.com', 'CRITICAL - SQLi/RCE plugin'),
               ('joomla.org', 'CRITICAL - SQLi/RCE extension'),
               ('drupal.org', 'CRITICAL - RCE/SA-CORE'),
@@ -98,62 +90,44 @@ jobs:
               ('djangoproject.com', 'CRITICAL - RCE/CVE'),
               ('rubyonrails.org', 'CRITICAL - RCE/CVE'),
               ('spring.io', 'CRITICAL - RCE/CVE'),
-              ('apache.org', 'CRITICAL - RCE/CVE'),
-              ('nginx.org', 'CRITICAL - RCE/CVE'),
-              ('iis.net', 'CRITICAL - RCE/CVE'),
-              
-              # CRITICAL: Lỗi payment, logic tiền
               ('stripe.com', 'CRITICAL - Payment bypass'),
               ('paypal.com', 'CRITICAL - Payment logic'),
               ('coinbase.com', 'CRITICAL - Crypto theft'),
               ('binance.com', 'CRITICAL - Withdraw bypass'),
-              ('kraken.com', 'CRITICAL - Trading logic'),
               ('uniswap.org', 'CRITICAL - Smart contract drain'),
               ('chain.link', 'CRITICAL - Oracle manipulation'),
               ('aave.com', 'CRITICAL - Lending logic'),
-              ('compound.finance', 'CRITICAL - Liquidation bypass'),
-              ('gmx.io', 'CRITICAL - Trading logic'),
-              
-              # CRITICAL: Lỗi cloud, container escape
+              ('github.com', 'CRITICAL - API bypass'),
+              ('gitlab.com', 'CRITICAL - CI/CD escape'),
               ('aws.amazon.com', 'CRITICAL - AWS escape'),
               ('azure.microsoft.com', 'CRITICAL - Azure escape'),
               ('cloud.google.com', 'CRITICAL - GCP escape'),
-              ('digitalocean.com', 'CRITICAL - Container escape'),
-              
-              # CRITICAL: Lỗi API, GraphQL
-              ('github.com', 'CRITICAL - API bypass'),
-              ('gitlab.com', 'CRITICAL - CI/CD escape'),
-              ('reddit.com', 'CRITICAL - API logic'),
-              ('discord.com', 'CRITICAL - API bypass'),
-              ('telegram.org', 'CRITICAL - Bot takeover'),
-              
-              # CRITICAL: Lỗi e-commerce logic
               ('amazon.com', 'CRITICAL - Payment bypass'),
-              ('ebay.com', 'CRITICAL - Auction logic'),
-              ('alibaba.com', 'CRITICAL - Trade logic'),
               ('booking.com', 'CRITICAL - Booking bypass'),
               ('airbnb.com', 'CRITICAL - Reservation logic'),
+              ('reddit.com', 'CRITICAL - API logic'),
+              ('discord.com', 'CRITICAL - API bypass'),
           ]
           
-          critical_domains = [d for d, _ in critical_bug_websites]
-          for domain, desc in critical_bug_websites:
+          high_value_domains = [d for d, _ in high_value_websites]
+          for domain, desc in high_value_websites:
               if domain not in seen:
                   seen.add(domain)
                   all_targets.append({
                       'domain': domain,
-                      'source': f'CRITICAL - {desc}',
-                      'type': 'CriticalBug',
+                      'source': desc,
+                      'type': 'HighValue',
                       'priority': 1
                   })
-                  if domain not in history['critical_bug']:
-                      history['critical_bug'].append(domain)
+                  if domain not in history['high_value']:
+                      history['high_value'].append(domain)
           
           # ============================================
           # 2. LẤY TỪ HACKERONE
           # ============================================
           print("\n🔍 ĐANG LẤY WEB TỪ HACKERONE...")
           try:
-              r = requests.get('https://hackerone.com/programs/search?query=type:public', timeout=15)
+              r = requests.get('https://hackerone.com/programs/search?query=type:public', timeout=15, headers={'User-Agent': 'Mozilla/5.0'})
               if r.status_code == 200:
                   soup = BeautifulSoup(r.text, 'html.parser')
                   count = 0
@@ -167,24 +141,24 @@ jobs:
                               domain = part.strip().lower()
                               if '.' in domain and len(domain) > 5 and not domain.startswith('http'):
                                   if domain not in seen and len(domain) < 50:
-                                      is_critical = domain in critical_domains
+                                      is_high = domain in high_value_domains
                                       seen.add(domain)
                                       all_targets.append({
                                           'domain': domain,
-                                          'source': 'HackerOne' + (' 🚨' if is_critical else ''),
+                                          'source': 'HackerOne' + (' 💎' if is_high else ''),
                                           'type': 'BugBounty',
-                                          'priority': 1 if is_critical else 3
+                                          'priority': 1 if is_high else 3
                                       })
                                       count += 1
           except Exception as e:
-              print(f"⚠️ HackerOne: {e}")
+              print(f"⚠️ Lỗi HackerOne: {e}")
           
           # ============================================
           # 3. LẤY TỪ BUGCROWD
           # ============================================
           print("\n🔍 ĐANG LẤY WEB TỪ BUGCROWD...")
           try:
-              r = requests.get('https://bugcrowd.com/programs', timeout=15)
+              r = requests.get('https://bugcrowd.com/programs', timeout=15, headers={'User-Agent': 'Mozilla/5.0'})
               if r.status_code == 200:
                   soup = BeautifulSoup(r.text, 'html.parser')
                   count = 0
@@ -196,24 +170,24 @@ jobs:
                           domain = text.lower().strip()
                           if domain and domain not in seen and len(domain) < 50:
                               if not any(x in domain for x in ['bugcrowd', 'hackerone', 'immunefi']):
-                                  is_critical = domain in critical_domains
+                                  is_high = domain in high_value_domains
                                   seen.add(domain)
                                   all_targets.append({
                                       'domain': domain,
-                                      'source': 'Bugcrowd' + (' 🚨' if is_critical else ''),
+                                      'source': 'Bugcrowd' + (' 💎' if is_high else ''),
                                       'type': 'BugBounty',
-                                      'priority': 1 if is_critical else 3
+                                      'priority': 1 if is_high else 3
                                   })
                                   count += 1
           except Exception as e:
-              print(f"⚠️ Bugcrowd: {e}")
+              print(f"⚠️ Lỗi Bugcrowd: {e}")
           
           # ============================================
           # 4. LẤY TỪ IMMUNEFI
           # ============================================
           print("\n🔍 ĐANG LẤY WEB TỪ IMMUNEFI...")
           try:
-              r = requests.get('https://immunefi.com/explore/', timeout=15)
+              r = requests.get('https://immunefi.com/explore/', timeout=15, headers={'User-Agent': 'Mozilla/5.0'})
               if r.status_code == 200:
                   soup = BeautifulSoup(r.text, 'html.parser')
                   count = 0
@@ -227,33 +201,64 @@ jobs:
                               domain = part.strip().lower()
                               if '.' in domain and len(domain) > 5:
                                   if domain not in seen:
-                                      is_critical = domain in critical_domains
+                                      is_high = domain in high_value_domains
                                       seen.add(domain)
                                       all_targets.append({
                                           'domain': domain,
-                                          'source': 'Immunefi' + (' 🚨' if is_critical else ''),
+                                          'source': 'Immunefi' + (' 💎' if is_high else ''),
                                           'type': 'Web3',
-                                          'priority': 1 if is_critical else 2
+                                          'priority': 1 if is_high else 2
                                       })
                                       count += 1
           except Exception as e:
-              print(f"⚠️ Immunefi: {e}")
+              print(f"⚠️ Lỗi Immunefi: {e}")
           
           # ============================================
-          # 5. CHỌN 20 WEB CÓ LỖI CRITICAL NHIỀU NHẤT
+          # 5. THÊM WEB TỪ DANH SÁCH GIÁ TRỊ CAO
           # ============================================
-          print("\n🚨 CHỌN 20 WEB CÓ LỖI CRITICAL NHIỀU NHẤT...")
+          more_high_value = [
+              ('compound.finance', 'Compound - $10M+ bounty'),
+              ('gmx.io', 'GMX - $5M bounty'),
+              ('morpho.org', 'Morpho - $2.5M bounty'),
+              ('injective.com', 'Injective - $500K bounty'),
+              ('near.org', 'NEAR - New'),
+              ('aptosfoundation.org', 'Aptos - New'),
+              ('pyth.network', 'Pyth Network'),
+              ('sky.money', 'Sky/MakerDAO - $10M'),
+              ('layerzero.com', 'LayerZero - $15M'),
+              ('wormhole.com', 'Wormhole - $10M'),
+          ]
+          
+          for domain, desc in more_high_value:
+              if domain not in seen:
+                  seen.add(domain)
+                  all_targets.append({
+                      'domain': domain,
+                      'source': desc,
+                      'type': 'HighValue',
+                      'priority': 1
+                  })
+                  if domain not in history['high_value']:
+                      history['high_value'].append(domain)
+          
+          # ============================================
+          # 6. CHỌN 20 WEB TỐT NHẤT
+          # ============================================
+          print("\n👑 CHỌN 20 WEB NHIỀU LỖI GIÁ TRỊ NHẤT...")
           
           priority_1 = [t for t in all_targets if t['priority'] == 1]
           priority_2 = [t for t in all_targets if t['priority'] == 2]
           priority_3 = [t for t in all_targets if t['priority'] == 3]
           
+          # Ưu tiên web giá trị cao + web mới từ nền tảng
           random.shuffle(priority_1)
           random.shuffle(priority_2)
           random.shuffle(priority_3)
           
-          selected = priority_1[:15] + priority_2[:3] + priority_3[:2]
+          # Chọn 20 web: 12 web giá trị cao + 5 web3 + 3 bug bounty
+          selected = priority_1[:12] + priority_2[:5] + priority_3[:3]
           
+          # Nếu thiếu, bổ sung
           if len(selected) < 20:
               selected += priority_2[:20-len(selected)]
           if len(selected) < 20:
@@ -262,14 +267,15 @@ jobs:
           random.shuffle(selected)
           selected = selected[:20]
           
-          used_domains = [t['domain'] for t in selected]
-          for domain in used_domains:
-              if domain not in history['used']:
-                  history['used'].append(domain)
+          # Cập nhật lịch sử
+          for t in selected:
+              if t['domain'] not in history['scanned']:
+                  history['scanned'].append(t['domain'])
           
           with open('history.json', 'w') as f:
               json.dump(history, f, indent=2)
           
+          # Ghi file
           with open('targets.txt', 'w') as f:
               for t in selected:
                   domain = t['domain']
@@ -277,22 +283,25 @@ jobs:
                       domain = 'https://' + domain
                   f.write(f"{domain}  # {t['source']}\n")
           
+          # In kết quả
           print("\n" + "="*70)
-          print("🚨 20 WEB CÓ LỖI CRITICAL NHIỀU NHẤT:")
+          print("👑 20 WEB NHIỀU LỖI GIÁ TRỊ NHẤT:")
           print("="*70)
           for i, t in enumerate(selected, 1):
-              priority_label = "🚨" if t['priority'] == 1 else ("🔶" if t['priority'] == 2 else "🔹")
-              print(f"{i:2}. {priority_label} {t['domain']:35} → {t['source']}")
+              icon = "💎" if t['priority'] == 1 else ("🔶" if t['priority'] == 2 else "🔹")
+              print(f"{i:2}. {icon} {t['domain']:35} → {t['source']}")
           print("="*70)
-          print(f"✅ TỔNG: {len(selected)} WEB CRITICAL")
-          print(f"🚨 CRITICAL BUG: {len([t for t in selected if t['priority'] == 1])}")
-          print(f"📊 WEB3: {len([t for t in selected if t['priority'] == 2])}")
-          print(f"📊 BUG BOUNTY: {len([t for t in selected if t['priority'] == 3])}")
+          print(f"✅ TỔNG: {len(selected)} WEB")
+          print(f"💎 GIÁ TRỊ CAO: {len([t for t in selected if t['priority'] == 1])}")
+          print(f"🔶 WEB3: {len([t for t in selected if t['priority'] == 2])}")
+          print(f"🔹 BUG BOUNTY: {len([t for t in selected if t['priority'] == 3])}")
+          print(f"📊 WEB ĐÃ QUÉT: {len(history['scanned'])}")
           print("="*70)
           PYEOF
           
-          python3 critical_hunter.py
+          python3 target_finder.py
           
+          # Kiểm tra file
           if [ ! -s targets.txt ]; then
               echo "⚠️ KHÔNG TÌM THẤY MỤC TIÊU! DÙNG DANH SÁCH DỰ PHÒNG..."
               cat > targets.txt << 'EOF'
@@ -304,11 +313,7 @@ jobs:
           https://laravel.com
           https://djangoproject.com
           https://rubyonrails.org
-          https://aws.amazon.com
-          https://azure.microsoft.com
-          https://cloud.google.com
-          https://github.com
-          https://gitlab.com
+          https://spring.io
           https://stripe.com
           https://paypal.com
           https://coinbase.com
@@ -316,6 +321,10 @@ jobs:
           https://uniswap.org
           https://chain.link
           https://aave.com
+          https://github.com
+          https://gitlab.com
+          https://aws.amazon.com
+          https://azure.microsoft.com
           EOF
           fi
           
@@ -323,30 +332,29 @@ jobs:
           echo "🎯 SỐ MỤC TIÊU: $TARGET_COUNT"
           echo "target_count=$TARGET_COUNT" >> $GITHUB_ENV
           
-          echo "📋 DANH SÁCH WEB CÓ LỖI CRITICAL:"
+          echo "📋 DANH SÁCH WEB:"
           cat targets.txt
 
       - name: 🔍 QUÉT XUYÊN LỤC ĐỊA
         timeout-minutes: 120
         run: |
-          echo "🚨 BẮT ĐẦU: $(date)"
+          echo "⏰ BẮT ĐẦU: $(date)"
           echo "🎯 MỤC TIÊU: ${{ env.target_count }}"
-          echo "📊 MỨC ĐỘ: ${{ github.event.inputs.severity_level || 'critical,high' }}"
           
           nuclei \
             -list targets.txt \
-            -severity ${{ github.event.inputs.severity_level || 'critical,high' }} \
+            -severity ${{ github.event.inputs.severity_level || 'critical,high,medium' }} \
             -t /tmp/ultimate-templates/ \
             -t /tmp/ultimate-templates/geeknik/ \
             -t /tmp/ultimate-templates/extra/ \
             -t /tmp/ultimate-templates/random/ \
             -t /tmp/ultimate-templates/official/ \
-            -c 300 \
-            -bulk-size 200 \
-            -rate-limit 0 \
-            -timeout 20 \
+            -c 150 \
+            -bulk-size 50 \
+            -rate-limit 100 \
+            -timeout 15 \
             -retries 2 \
-            -max-redirects 10 \
+            -max-redirects 5 \
             -follow-redirects \
             -scan-all-ips \
             -subdomain \
@@ -362,7 +370,7 @@ jobs:
             -o results.txt \
             -no-interactsh \
             -disable-update-check \
-            -max-host-error 50 \
+            -max-host-error 20 \
             -verify \
             -silent \
             -no-mhe \
@@ -389,7 +397,7 @@ jobs:
           TOTAL=$(cat results.txt 2>/dev/null | wc -l)
           
           echo "=================================================="
-          echo "🚨 KẾT QUẢ QUÉT - WEB CÓ LỖI CRITICAL"
+          echo "👑 KẾT QUẢ QUÉT - LỖI GIÁ TRỊ"
           echo "=================================================="
           echo "🔥 CRITICAL: $CRITICAL"
           echo "⚡ HIGH: $HIGH"
@@ -416,46 +424,46 @@ jobs:
           <html>
           <head>
             <meta charset="UTF-8">
-            <title>🚨 CHỦ NHÂN VŨ TRỤ - SĂN LỖI CRITICAL</title>
+            <title>👑 CHỦ NHÂN VŨ TRỤ - SCAN REPORT</title>
             <style>
               *{margin:0;padding:0;box-sizing:border-box}
               body{font-family:'Segoe UI',Arial,sans-serif;background:radial-gradient(ellipse at center,#0a0a0f 0%,#1a0a2e 30%,#0a0a0f 100%);min-height:100vh;padding:20px;color:#e0e0e0}
-              .container{max-width:1400px;margin:0 auto;background:rgba(255,255,255,0.03);backdrop-filter:blur(20px);border-radius:20px;padding:30px;border:2px solid rgba(255,0,0,0.3);box-shadow:0 0 100px rgba(255,0,0,0.1)}
-              .header{text-align:center;border-bottom:2px solid rgba(255,0,0,0.2);padding-bottom:20px;margin-bottom:30px}
-              .header h1{font-size:36px;background:linear-gradient(90deg,#ff0000,#ff4400,#ff0000);-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:criticalGlow 2s infinite alternate}
-              @keyframes criticalGlow{0%{filter:drop-shadow(0 0 20px rgba(255,0,0,0.5))}50%{filter:drop-shadow(0 0 60px rgba(255,0,0,0.8))}100%{filter:drop-shadow(0 0 20px rgba(255,0,0,0.5))}}
-              .header .sub{font-size:16px;color:#ff4444;opacity:0.8;margin-top:5px}
+              .container{max-width:1400px;margin:0 auto;background:rgba(255,255,255,0.03);backdrop-filter:blur(20px);border-radius:20px;padding:30px;border:2px solid rgba(255,215,0,0.3);box-shadow:0 0 100px rgba(255,215,0,0.1)}
+              .header{text-align:center;border-bottom:2px solid rgba(255,215,0,0.2);padding-bottom:20px;margin-bottom:30px}
+              .header h1{font-size:36px;background:linear-gradient(90deg,#ffd700,#ff6b00,#ffd700,#ff6b00);-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:crownGlow 3s infinite alternate}
+              @keyframes crownGlow{0%{filter:drop-shadow(0 0 20px rgba(255,215,0,0.5))}50%{filter:drop-shadow(0 0 60px rgba(255,215,0,0.8))}100%{filter:drop-shadow(0 0 20px rgba(255,215,0,0.5))}}
+              .header .sub{font-size:16px;color:#ffd700;opacity:0.8;margin-top:5px}
               .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:15px;margin-bottom:30px}
-              .stat-card{background:rgba(255,255,255,0.05);border-radius:12px;padding:20px;text-align:center;border:1px solid rgba(255,0,0,0.1);transition:all 0.3s}
-              .stat-card:hover{transform:scale(1.05);border-color:#ff0000;box-shadow:0 0 40px rgba(255,0,0,0.2)}
+              .stat-card{background:rgba(255,255,255,0.05);border-radius:12px;padding:20px;text-align:center;border:1px solid rgba(255,215,0,0.1);transition:all 0.3s}
+              .stat-card:hover{transform:scale(1.05);border-color:#ffd700;box-shadow:0 0 40px rgba(255,215,0,0.2)}
               .stat-number{font-size:32px;font-weight:bold}
               .stat-label{font-size:12px;opacity:0.7;margin-top:5px}
-              .critical{color:#ff0000;text-shadow:0 0 30px rgba(255,0,0,0.6)}
+              .critical{color:#ff4444;text-shadow:0 0 30px rgba(255,68,68,0.6)}
               .high{color:#ff8800;text-shadow:0 0 30px rgba(255,136,0,0.6)}
               .medium{color:#ffcc00;text-shadow:0 0 30px rgba(255,204,0,0.6)}
               .low{color:#44ccff;text-shadow:0 0 30px rgba(68,204,255,0.6)}
               .info{color:#8888ff;text-shadow:0 0 30px rgba(136,136,255,0.6)}
-              .total{color:#ff0000;text-shadow:0 0 40px rgba(255,0,0,0.6)}
-              table{width:100%;border-collapse:collapse;background:rgba(255,255,255,0.02);border-radius:12px;overflow:hidden;margin-top:20px;border:1px solid rgba(255,0,0,0.1)}
+              .total{color:#ffd700;text-shadow:0 0 40px rgba(255,215,0,0.6)}
+              table{width:100%;border-collapse:collapse;background:rgba(255,255,255,0.02);border-radius:12px;overflow:hidden;margin-top:20px;border:1px solid rgba(255,215,0,0.1)}
               th,td{padding:12px 15px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.05)}
-              th{background:rgba(255,0,0,0.1);color:#ff0000;font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:2px}
-              tr:hover{background:rgba(255,0,0,0.05)}
+              th{background:rgba(255,215,0,0.1);color:#ffd700;font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:2px}
+              tr:hover{background:rgba(255,215,0,0.05)}
               .sev-badge{display:inline-block;padding:3px 12px;border-radius:20px;font-size:10px;font-weight:bold;text-transform:uppercase}
-              .sev-critical{background:#ff0000;color:#fff;box-shadow:0 0 20px rgba(255,0,0,0.5)}
+              .sev-critical{background:#ff4444;color:#fff;box-shadow:0 0 20px rgba(255,68,68,0.5)}
               .sev-high{background:#ff8800;color:#fff;box-shadow:0 0 20px rgba(255,136,0,0.5)}
               .sev-medium{background:#ffcc00;color:#000}
               .sev-low{background:#44ccff;color:#000}
               .sev-info{background:#8888ff;color:#fff}
-              .footer{margin-top:30px;padding-top:15px;border-top:1px solid rgba(255,0,0,0.1);text-align:center;font-size:11px;opacity:0.4;color:#ff0000}
-              .loading{text-align:center;padding:40px;color:#ff0000}
-              .empty{text-align:center;padding:30px;opacity:0.5;color:#ff0000}
+              .footer{margin-top:30px;padding-top:15px;border-top:1px solid rgba(255,215,0,0.1);text-align:center;font-size:11px;opacity:0.4;color:#ffd700}
+              .loading{text-align:center;padding:40px;color:#ffd700}
+              .empty{text-align:center;padding:30px;opacity:0.5;color:#ffd700}
             </style>
           </head>
           <body>
           <div class="container">
             <div class="header">
-              <h1>🚨 CHỦ NHÂN VŨ TRỤ</h1>
-              <div class="sub">🔥 SĂN LỖI CRITICAL - NGHIÊM TRỌNG NHẤT</div>
+              <h1>👑 CHỦ NHÂN VŨ TRỤ</h1>
+              <div class="sub">🔥 LỖI GIÁ TRỊ - CHƯA VÁ</div>
             </div>
             <div class="stats-grid">
               <div class="stat-card"><div class="stat-number critical" id="critical">...</div><div class="stat-label">🔥 CRITICAL</div></div>
@@ -465,9 +473,9 @@ jobs:
               <div class="stat-card"><div class="stat-number info" id="info">...</div><div class="stat-label">ℹ️ INFO</div></div>
               <div class="stat-card"><div class="stat-number total" id="total">...</div><div class="stat-label">📦 TOTAL</div></div>
             </div>
-            <h3 style="color:#ff0000;text-shadow:0 0 30px rgba(255,0,0,0.3);">🔥 KHO BÁU CRITICAL & HIGH</h3>
+            <h3 style="color:#ffd700;text-shadow:0 0 30px rgba(255,215,0,0.3);">🔥 KHO BÁU CRITICAL & HIGH</h3>
             <div id="table-container"><div class="loading">⏳ ĐANG TẢI...</div></div>
-            <div class="footer">🚨 Chủ nhân vũ trụ - Săn lỗi Critical • All rights reserved</div>
+            <div class="footer">👑 Chủ nhân vũ trụ • All rights reserved</div>
           </div>
           <script>
             fetch('results.json')
@@ -489,14 +497,14 @@ jobs:
                 const container = document.getElementById('table-container');
                 const items = [...sev.critical, ...sev.high];
                 if (items.length === 0) {
-                  container.innerHTML = '<div class="empty">💎 Chưa có lỗi Critical nào</div>';
+                  container.innerHTML = '<div class="empty">💎 Chưa có lỗi Critical/High nào</div>';
                   return;
                 }
                 let html = '<table><tr><th>MỨC ĐỘ</th><th>TÊN LỖ HỔNG</th><th>URL</th></tr>';
                 items.forEach(item => {
                   const badge = `<span class="sev-badge sev-${item.info.severity}">${item.info.severity.toUpperCase()}</span>`;
                   const url = item.matchedAt || item['matched-at'] || 'N/A';
-                  html += `<tr><td>${badge}</td><td><strong style="color:#ff4444;">${item.info.name}</strong></td><td style="font-size:12px;opacity:0.8;">${url}</td></tr>`;
+                  html += `<tr><td>${badge}</td><td><strong style="color:#ffd700;">${item.info.name}</strong></td><td style="font-size:12px;opacity:0.8;">${url}</td></tr>`;
                 });
                 html += '</table>';
                 container.innerHTML = html;
@@ -513,7 +521,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: critical-scan-report-${{ github.run_id }}
+          name: value-scan-report-${{ github.run_id }}
           path: |
             results.txt
             results.json
