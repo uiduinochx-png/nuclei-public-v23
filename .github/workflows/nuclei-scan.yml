@@ -89,9 +89,10 @@ jobs:
             -max-redirects 10 \
             -follow-redirects \
             -scan-all-ips \
+            -subdomain \
             -pt http,https,dns,network,tcp,ssl,whois \
             -tags cve,kev,osint,exposure,wordpress,drupal,joomla,magento,opensource,aws,azure,gcp,cloud,apache,tomcat,nginx,iis,spring,laravel,django,rails,react,angular,vue,graphql,rest,soap,webcache,webmin \
-            -exclude-tags "miscellaneous,takeover,panel,tech-detect,information-disclosure,header" \
+            -exclude-tags "miscellaneous,takeover,panel" \
             -show-match \
             -stats \
             -stats-interval 10 \
