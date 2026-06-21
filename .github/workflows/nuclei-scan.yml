@@ -9,7 +9,7 @@ on:
         default: ''
       scan_mode:
         description: '⚡ CẤP ĐỘ HỦY DIỆT'
-        required: true
+        required: false
         default: 'ultimate'
         type: choice
         options:
@@ -18,14 +18,14 @@ on:
           - omnipotent
       severity_level:
         description: '📊 MỨC ĐỘ LỖ HỔNG'
-        required: true
+        required: false
         default: 'critical,high'
         type: choice
         options:
-          - 'critical,high'
-          - 'critical,high,medium'
-          - 'critical,high,medium,low'
-          - 'critical,high,medium,low,info'
+          - critical,high
+          - critical,high,medium
+          - critical,high,medium,low
+          - critical,high,medium,low,info
   schedule:
     - cron: '0 */3 * * *'
 
@@ -77,14 +77,13 @@ jobs:
             echo "https://docs.launchdarkly.com" >> targets.txt
           fi
           
-          # LÀM SẠCH DANH SÁCH - KHÔNG BỎ SÓT GÌ
           sed -i '/^$/d' targets.txt
           sed -i 's/^[ \t]*//;s/[ \t]*$//' targets.txt
           sed -i 's/^\([^h]\)/https:\/\/\1/' targets.txt
           
           TARGET_COUNT=$(wc -l < targets.txt)
           echo "🎯 SỐ MỤC TIÊU CẦN HỦY DIỆT: $TARGET_COUNT"
-          echo "target_count=$TARGET_COUNT" >> $GITHUB_OUTPUT
+          echo "target_count=$TARGET_COUNT" >> $GITHUB_ENV
           
           echo "✅ DANH SÁCH MỤC TIÊU ĐÃ SẴN SÀNG!"
 
@@ -94,12 +93,11 @@ jobs:
           echo "🔥 BẮT ĐẦU QUÉT XUYÊN LỤC ĐỊA 🔥"
           echo "=================================================="
           echo "⏰ THỜI GIAN: $(date)"
-          echo "🎯 MỤC TIÊU: ${{ steps.prepare_targets.outputs.target_count }}"
+          echo "🎯 MỤC TIÊU: ${{ env.target_count }}"
           echo "⚙️ CHẾ ĐỘ: ${{ github.event.inputs.scan_mode || 'ultimate' }}"
           echo "📊 MỨC ĐỘ: ${{ github.event.inputs.severity_level || 'critical,high' }}"
           echo "=================================================="
           
-          # LỆNH QUÉT HỦY DIỆT - KHÔNG THỂ CÓ LỖI
           nuclei \
             -list targets.txt \
             -severity ${{ github.event.inputs.severity_level || 'critical,high' }} \
@@ -134,23 +132,23 @@ jobs:
             -no-mhe \
             -project \
             -project-path /tmp/nuclei-project \
-            2>/dev/null
+            2>/dev/null || true
           
           echo "=================================================="
           echo "✅ QUÉT HOÀN TẤT!"
           echo "⏰ KẾT THÚC: $(date)"
           echo "=================================================="
 
-      - name: 📊 PHÂN TÍCH KHO BÁU - HỦY DIỆT DỮ LIỆU
+      - name: 📊 PHÂN TÍCH KHO BÁU
         run: |
           echo "=================================================="
           echo "📊 PHÂN TÍCH KHO BÁU HỦY DIỆT"
           echo "=================================================="
           
           if [ ! -f results.json ]; then
-            echo "⚠️ KHÔNG TÌM THẤY KẾT QUẢ! CÓ THỂ DO KHÔNG CÓ LỖ HỔNG HOẶC QUÉT CHƯA HOÀN TẤT"
-            echo "{}" > results.json
-            echo "[]" > results.jsonl
+            echo "⚠️ KHÔNG CÓ KẾT QUẢ! TẠO FILE RỖNG..."
+            echo '{}' > results.json
+            echo '[]' > results.jsonl
             touch results.txt
             exit 0
           fi
@@ -184,7 +182,7 @@ jobs:
           echo "─────────────────────────────────────────────"
           jq -r 'select(.info.severity=="high") | "[⚡] " + .info.name + " → " + .matched-at' results.json 2>/dev/null | head -20
 
-      - name: 📄 TẠO BÁO CÁO HỦY DIỆT
+      - name: 📄 TẠO BÁO CÁO
         if: always()
         run: |
           echo "📄 TẠO BÁO CÁO XUYÊN LỤC ĐỊA..."
@@ -194,7 +192,7 @@ jobs:
           <html>
           <head>
             <meta charset="UTF-8">
-            <title>🚀 CỖ MÁY QUÉT XUYÊN LỤC ĐỊA 🚀</title>
+            <title>🚀 CỖ MÁY QUÉT XUYÊN LỤC ĐỊA</title>
             <style>
               *{margin:0;padding:0;box-sizing:border-box}
               body{font-family:'Segoe UI',Arial,sans-serif;background:linear-gradient(135deg,#0a0a0f 0%,#1a1a2e 30%,#16213e 60%,#0a0a0f 100%);min-height:100vh;padding:20px;color:#e0e0e0}
@@ -227,7 +225,7 @@ jobs:
           </head>
           <body>
           <div class="container">
-            <div class="header"><h1>🚀 CỖ MÁY QUÉT XUYÊN LỤC ĐỊA 🚀</h1><div style="font-size:14px;opacity:0.6;">🔥 HỦY DIỆT MỌI LỖ HỔNG - Generated: $(date)</div></div>
+            <div class="header"><h1>🚀 CỖ MÁY QUÉT XUYÊN LỤC ĐỊA</h1><div style="font-size:14px;opacity:0.6;">🔥 HỦY DIỆT MỌI LỖ HỔNG</div></div>
             <div class="stats-grid">
               <div class="stat-card"><div class="stat-number critical">$(jq 'select(.info.severity=="critical")' results.json 2>/dev/null | wc -l)</div><div class="stat-label">🔥 CRITICAL</div></div>
               <div class="stat-card"><div class="stat-number high">$(jq 'select(.info.severity=="high")' results.json 2>/dev/null | wc -l)</div><div class="stat-label">⚡ HIGH</div></div>
@@ -236,12 +234,12 @@ jobs:
               <div class="stat-card"><div class="stat-number info">$(jq 'select(.info.severity=="info")' results.json 2>/dev/null | wc -l)</div><div class="stat-label">ℹ️ INFO</div></div>
               <div class="stat-card"><div class="stat-number" style="color:#fff;">$(cat results.txt 2>/dev/null | wc -l)</div><div class="stat-label">📦 TOTAL</div></div>
             </div>
-            <h3>🔥 KHO BÁU LỖ HỔNG CRITICAL & HIGH</h3>
+            <h3>🔥 KHO BÁU CRITICAL & HIGH</h3>
             <table>
               <tr><th>MỨC ĐỘ</th><th>TÊN LỖ HỔNG</th><th>URL</th></tr>
               $(jq -r 'select(.info.severity=="critical" or .info.severity=="high") | "<tr><td><span class=\"severity-badge sev-" + (.info.severity) + "\">" + (.info.severity | ascii_upcase) + "</span></td><td><strong>" + .info.name + "</strong></td><td style=\"font-size:12px;opacity:0.8;\">" + .matched-at + "</td></tr>"' results.json 2>/dev/null | head -100)
             </table>
-            <div class="footer">🔥 Cỗ máy quét xuyên lục địa - Hủy diệt mọi lỗ hổng trong vũ trụ! 🚀</div>
+            <div class="footer">🔥 Cỗ máy quét xuyên lục địa - Hủy diệt mọi lỗ hổng trong vũ trụ!</div>
           </div>
           </body>
           </html>
@@ -249,7 +247,7 @@ jobs:
           
           echo "✅ BÁO CÁO ĐÃ TẠO XONG!"
 
-      - name: 💾 LƯU KHO BÁU VŨ TRỤ
+      - name: 💾 LƯU KHO BÁU
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -264,15 +262,15 @@ jobs:
             /tmp/nuclei-project/
           retention-days: 30
 
-      - name: 🎯 THÔNG BÁO HOÀN THÀNH - HỦY DIỆT HOÀN TẤT
+      - name: 🎯 HOÀN THÀNH
         if: always()
         run: |
           echo "=================================================="
           echo "🌌 QUÉT XUYÊN LỤC ĐỊA HOÀN TẤT! 🌌"
           echo "=================================================="
-          echo "📊 TỔNG SỐ LỖ HỔNG: $(cat results.txt 2>/dev/null | wc -l)"
-          echo "🔥 CRITICAL: $(jq -r 'select(.info.severity=="critical")' results.json 2>/dev/null | wc -l)"
-          echo "⚡ HIGH: $(jq -r 'select(.info.severity=="high")' results.json 2>/dev/null | wc -l)"
+          echo "📊 TỔNG SỐ LỖ HỔNG: $(cat results.txt 2>/dev/null | wc -l || echo 0)"
+          echo "🔥 CRITICAL: $(jq -r 'select(.info.severity=="critical")' results.json 2>/dev/null | wc -l || echo 0)"
+          echo "⚡ HIGH: $(jq -r 'select(.info.severity=="high")' results.json 2>/dev/null | wc -l || echo 0)"
           echo "=================================================="
           echo "📥 TẢI BÁO CÁO TẠI ARTIFACTS"
           echo "=================================================="
