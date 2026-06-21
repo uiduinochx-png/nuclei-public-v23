@@ -1,10 +1,1 @@
-momentum.xyz
-usd.money
-flatmoney.finance
-satlayer.net
-sentiment.xyz
-veda.xyz
-firedancer.solana.com
-citrea.xyz
-nearintents.near
-aptosfoundation.org
+
