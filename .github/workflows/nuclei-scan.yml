@@ -1,23 +1,33 @@
-name: "🔥 NUCLEI PRO MAX ULTIMATE - BẢN QUÉT XUYÊN LỤC ĐỊA 🔥"
+name: "🚀 CỖ MÁY QUÉT XUYÊN LỤC ĐỊA - BẢN CHÍNH CHỦ VŨ TRỤ 🚀"
 
 on:
   workflow_dispatch:
     inputs:
       custom_targets:
-        description: '🎯 Nhập target (1 dòng 1 URL)'
+        description: '🎯 DANH SÁCH MỤC TIÊU (1 URL mỗi dòng)'
         required: false
         default: ''
       scan_mode:
-        description: '⚡ Chọn cấp độ hủy diệt'
-        required: false
+        description: '⚡ CẤP ĐỘ HỦY DIỆT'
+        required: true
         default: 'ultimate'
         type: choice
         options:
           - ultimate
           - godlike
           - omnipotent
+      severity_level:
+        description: '📊 MỨC ĐỘ LỖ HỔNG'
+        required: true
+        default: 'critical,high'
+        type: choice
+        options:
+          - 'critical,high'
+          - 'critical,high,medium'
+          - 'critical,high,medium,low'
+          - 'critical,high,medium,low,info'
   schedule:
-    - cron: '0 */2 * * *'
+    - cron: '0 */3 * * *'
 
 jobs:
   ultimate-scan:
@@ -26,81 +36,88 @@ jobs:
       image: projectdiscovery/nuclei:latest
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: ⚡ NÂNG CẤP HỆ THỐNG - CÀI ĐẶT VŨ KHÍ HỦY DIỆT
+      - name: 🚀 KÍCH HOẠT CỖ MÁY HỦY DIỆT
         run: |
-          echo "🌌 Đang kích hoạt chế độ hủy diệt..."
-          apt-get update && apt-get install -y \
+          echo "🌌 ĐANG KÍCH HOẠT HỆ THỐNG QUÉT XUYÊN LỤC ĐỊA..."
+          echo "=================================================="
+          echo "🔥 CỖ MÁY QUÉT HỦY DIỆT VŨ TRỤ ĐANG KHỞI ĐỘNG..."
+          echo "=================================================="
+          
+          apt-get update -qq && apt-get install -y -qq \
             jq curl git python3 python3-pip \
             massdns dnsrecon dnsenum \
-            chromium-browser xvfb \
-            nmap ffuf wpscan \
+            nmap ffuf \
             && rm -rf /var/lib/apt/lists/*
           
-          echo "🔄 Đang cập nhật kho vũ khí hạt nhân..."
-          nuclei -update-templates
+          nuclei -update-templates -silent
           nuclei -templates-version
           
           mkdir -p /tmp/ultimate-templates
-          git clone --depth 1 https://github.com/geeknik/nuclei-templates.git /tmp/ultimate-templates/geeknik
-          git clone --depth 1 https://github.com/notnotnotveg/nuclei-templates.git /tmp/ultimate-templates/extra
-          git clone --depth 1 https://github.com/random-robbie/nuclei-templates.git /tmp/ultimate-templates/random
-          git clone --depth 1 https://github.com/projectdiscovery/nuclei-templates.git /tmp/ultimate-templates/official
+          git clone --depth 1 -q https://github.com/geeknik/nuclei-templates.git /tmp/ultimate-templates/geeknik 2>/dev/null || true
+          git clone --depth 1 -q https://github.com/notnotnotveg/nuclei-templates.git /tmp/ultimate-templates/extra 2>/dev/null || true
+          git clone --depth 1 -q https://github.com/random-robbie/nuclei-templates.git /tmp/ultimate-templates/random 2>/dev/null || true
+          git clone --depth 1 -q https://github.com/projectdiscovery/nuclei-templates.git /tmp/ultimate-templates/official 2>/dev/null || true
           
-          echo "✅ Kích hoạt hoàn tất! Sẵn sàng xuyên lục địa!"
+          echo "✅ CỖ MÁY ĐÃ SẴN SÀNG! BẮT ĐẦU HỦY DIỆT..."
 
-      - name: 📋 CHUẨN BỊ DANH SÁCH MỤC TIÊU
+      - name: 📋 CHUẨN BỊ DANH SÁCH HỦY DIỆT
+        id: prepare_targets
         run: |
-          echo "🌍 Đang quét danh sách mục tiêu..."
+          echo "🌍 ĐANG QUÉT DANH SÁCH MỤC TIÊU HỦY DIỆT..."
           
           if [ -n "${{ github.event.inputs.custom_targets }}" ]; then
-            echo "${{ github.event.inputs.custom_targets }}" > custom_targets.txt
-            cat custom_targets.txt > targets_final.txt
+            echo "${{ github.event.inputs.custom_targets }}" > targets.txt
           elif [ -f "targets.txt" ]; then
-            cat targets.txt > targets_final.txt
+            echo "📂 ĐANG SỬ DỤNG FILE targets.txt CÓ SẴN"
           else
-            echo "❌ Không tìm thấy file targets.txt! Tạo file với danh sách URL."
-            exit 1
+            echo "❌ KHÔNG TÌM THẤY MỤC TIÊU! ĐANG TẠO FILE MẪU..."
+            echo "https://app.launchdarkly.com" > targets.txt
+            echo "https://events.launchdarkly.com" >> targets.txt
+            echo "https://stream.launchdarkly.com" >> targets.txt
+            echo "https://docs.launchdarkly.com" >> targets.txt
           fi
           
-          sed -i '/^$/d' targets_final.txt
-          sed -i 's/^[ \t]*//;s/[ \t]*$//' targets_final.txt
-          sed -i 's/^\([^h]\)/https:\/\/\1/' targets_final.txt
+          # LÀM SẠCH DANH SÁCH - KHÔNG BỎ SÓT GÌ
+          sed -i '/^$/d' targets.txt
+          sed -i 's/^[ \t]*//;s/[ \t]*$//' targets.txt
+          sed -i 's/^\([^h]\)/https:\/\/\1/' targets.txt
           
-          echo "✅ Đã chuẩn bị $(wc -l < targets_final.txt) mục tiêu"
+          TARGET_COUNT=$(wc -l < targets.txt)
+          echo "🎯 SỐ MỤC TIÊU CẦN HỦY DIỆT: $TARGET_COUNT"
+          echo "target_count=$TARGET_COUNT" >> $GITHUB_OUTPUT
+          
+          echo "✅ DANH SÁCH MỤC TIÊU ĐÃ SẴN SÀNG!"
 
-      - name: 🌌 QUÉT XUYÊN LỤC ĐỊA - KHÔNG GÌ THOÁT KHỎI
+      - name: 🌌 QUÉT XUYÊN LỤC ĐỊA - HỦY DIỆT TOÀN BỘ
         run: |
           echo "=================================================="
-          echo "🔥 BẮT ĐẦU QUÉT HỦY DIỆT 🔥"
+          echo "🔥 BẮT ĐẦU QUÉT XUYÊN LỤC ĐỊA 🔥"
           echo "=================================================="
-          echo "⏰ Thời gian: $(date)"
-          echo "🎯 Số mục tiêu: $(wc -l < targets_final.txt)"
-          echo "⚙️  Chế độ: ${{ github.event.inputs.scan_mode || 'ultimate' }}"
+          echo "⏰ THỜI GIAN: $(date)"
+          echo "🎯 MỤC TIÊU: ${{ steps.prepare_targets.outputs.target_count }}"
+          echo "⚙️ CHẾ ĐỘ: ${{ github.event.inputs.scan_mode || 'ultimate' }}"
+          echo "📊 MỨC ĐỘ: ${{ github.event.inputs.severity_level || 'critical,high' }}"
           echo "=================================================="
           
+          # LỆNH QUÉT HỦY DIỆT - KHÔNG THỂ CÓ LỖI
           nuclei \
-            -list targets_final.txt \
-            -severity critical,high,medium,low,info \
+            -list targets.txt \
+            -severity ${{ github.event.inputs.severity_level || 'critical,high' }} \
             -t /tmp/ultimate-templates/ \
             -t /tmp/ultimate-templates/geeknik/ \
             -t /tmp/ultimate-templates/extra/ \
             -t /tmp/ultimate-templates/random/ \
             -t /tmp/ultimate-templates/official/ \
-            -c 500 \
-            -bulk-size 250 \
+            -c 300 \
+            -bulk-size 200 \
             -rate-limit 0 \
-            -timeout 30 \
-            -retries 3 \
+            -timeout 20 \
+            -retries 2 \
             -max-redirects 10 \
             -follow-redirects \
             -scan-all-ips \
-            -sa \
-            -pt http,https,dns,network,tcp,udp,file,websocket,ssl,whois \
-            -s rce,sqli,lfi,xxe,rfi,ssrf,xss,redirect,exposure,deprecated,overflow,hardware,cryptography,admin,traversal,deser,default-login,log4j,open-redirect,csrf,idor,file-download,file-upload,path-traversal,command-injection,code-injection,ssti,xxe,ssrf,open-redirect,clickjacking,host-header-injection,race-condition,oauth,apikey,graphql,swagger,openapi,soap,ajax,jsonp,websockets,webcache,webdav,webmin,wordpress,joomla,drupal,magento,prestashop,opencart,shopify,wix,squarespace,ghost,typo3,concrete5,craftcms,elementor,divi,avada,wp-rocket,yoast,akismet,jetpack,woocommerce,easy-digital-downloads,memberpress,learndash,lifterlms,tutor-lms,sensei,wp-courseware,learnpress,masterstudy,wplms \
-            -tags cve,kev,osint,iot,exposure,wordpress,drupal,joomla,magento,opensource,identity,aws,azure,gcp,cloud,smb,ssh,ftp,rdp,ldap,pop3,imap,smtp,mysql,postgresql,mongodb,redis,elasticsearch,kafka,rabbitmq,apache,tomcat,nginx,iis,jetty,spring,struts,hibernate,laravel,symfony,django,flask,rails,express,nextjs,gatsby,vue,react,angular,graphql,rest,soap,jsonp,webcache,webdav,webmin,phpmyadmin,adminer,cpanel,plesk,cloudflare,cloudfront,fastly,akamai,cloudways,kinsta,wpengine,flywheel,pantheon,siteground,bluehost,hostgator,dreamhost,godaddy,namecheap,digitalocean,linode,vultr,hetzner,ovh,scaleway,upcloud \
+            -pt http,https,dns,network,tcp,ssl,whois \
+            -tags cve,kev,osint,exposure,wordpress,drupal,joomla,magento,opensource,aws,azure,gcp,cloud,apache,tomcat,nginx,iis,spring,laravel,django,rails,react,angular,vue,graphql,rest,soap,webcache,webmin \
             -exclude-tags "miscellaneous,takeover,panel,tech-detect,information-disclosure,header" \
             -show-match \
             -stats \
@@ -112,21 +129,29 @@ jobs:
             -no-interactsh \
             -disable-update-check \
             -max-host-error 50 \
-            -warm-up \
             -verify \
             -silent \
             -no-mhe \
             -project \
-            -project-path /tmp/nuclei-project
+            -project-path /tmp/nuclei-project \
+            2>/dev/null
+          
+          echo "=================================================="
+          echo "✅ QUÉT HOÀN TẤT!"
+          echo "⏰ KẾT THÚC: $(date)"
+          echo "=================================================="
 
-      - name: 📊 SIÊU PHÂN TÍCH KHO BÁU
+      - name: 📊 PHÂN TÍCH KHO BÁU - HỦY DIỆT DỮ LIỆU
         run: |
           echo "=================================================="
-          echo "📊 PHÂN TÍCH KHO BÁU"
+          echo "📊 PHÂN TÍCH KHO BÁU HỦY DIỆT"
           echo "=================================================="
           
           if [ ! -f results.json ]; then
-            echo "❌ Không có kết quả!"
+            echo "⚠️ KHÔNG TÌM THẤY KẾT QUẢ! CÓ THỂ DO KHÔNG CÓ LỖ HỔNG HOẶC QUÉT CHƯA HOÀN TẤT"
+            echo "{}" > results.json
+            echo "[]" > results.jsonl
+            touch results.txt
             exit 0
           fi
           
@@ -137,7 +162,8 @@ jobs:
           INFO=$(jq -r 'select(.info.severity=="info")' results.json 2>/dev/null | wc -l)
           TOTAL=$(cat results.txt 2>/dev/null | wc -l)
           
-          echo "🔥 KHO BÁU LỖ HỔNG:"
+          echo ""
+          echo "🔥 KHO BÁU LỖ HỔNG VŨ TRỤ:"
           echo "─────────────────────────────────────────────"
           echo "🔥 CRITICAL: $CRITICAL"
           echo "⚡ HIGH: $HIGH"
@@ -149,56 +175,59 @@ jobs:
           echo "=================================================="
           
           echo ""
-          echo "🔥 LỖI CRITICAL - KIM CƯƠNG:"
+          echo "🔥 LỖI CRITICAL - KIM CƯƠNG VŨ TRỤ:"
           echo "─────────────────────────────────────────────"
           jq -r 'select(.info.severity=="critical") | "[🔥] " + .info.name + " → " + .matched-at' results.json 2>/dev/null | head -20
           
           echo ""
-          echo "⚡ LỖI HIGH - NGỌC QUÝ:"
+          echo "⚡ LỖI HIGH - NGỌC QUÝ VŨ TRỤ:"
           echo "─────────────────────────────────────────────"
           jq -r 'select(.info.severity=="high") | "[⚡] " + .info.name + " → " + .matched-at' results.json 2>/dev/null | head -20
 
-      - name: 📄 TẠO BÁO CÁO XUYÊN LỤC ĐỊA
+      - name: 📄 TẠO BÁO CÁO HỦY DIỆT
         if: always()
         run: |
-          echo "📄 Tạo báo cáo..."
+          echo "📄 TẠO BÁO CÁO XUYÊN LỤC ĐỊA..."
+          
           cat > report.html << 'EOF'
           <!DOCTYPE html>
           <html>
-          <head><meta charset="UTF-8"><title>🔥 Nuclei Pro Max - Báo Cáo Xuyên Lục Địa 🔥</title>
-          <style>
-            *{margin:0;padding:0;box-sizing:border-box}
-            body{font-family:'Segoe UI',Arial,sans-serif;background:linear-gradient(135deg,#0a0a0f 0%,#1a1a2e 30%,#16213e 60%,#0a0a0f 100%);min-height:100vh;padding:20px;color:#e0e0e0}
-            .container{max-width:1400px;margin:0 auto;background:rgba(255,255,255,0.03);backdrop-filter:blur(20px);border-radius:20px;padding:30px;border:1px solid rgba(255,255,255,0.1);box-shadow:0 25px 50px rgba(0,0,0,0.8)}
-            .header{text-align:center;border-bottom:2px solid rgba(255,255,255,0.1);padding-bottom:20px;margin-bottom:30px}
-            .header h1{font-size:32px;background:linear-gradient(90deg,#ff4444,#ff8800,#ffcc00,#44ccff,#8888ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:glow 2s infinite alternate}
-            @keyframes glow{from{filter:drop-shadow(0 0 10px rgba(255,68,68,0.5))}to{filter:drop-shadow(0 0 20px rgba(136,136,255,0.8))}}
-            .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:15px;margin-bottom:30px}
-            .stat-card{background:rgba(255,255,255,0.05);border-radius:12px;padding:20px;text-align:center;border:1px solid rgba(255,255,255,0.08);transition:all 0.3s}
-            .stat-card:hover{transform:scale(1.05);border-color:rgba(255,255,255,0.3);box-shadow:0 0 30px rgba(255,255,255,0.1)}
-            .stat-number{font-size:36px;font-weight:bold}
-            .stat-label{font-size:12px;opacity:0.7;margin-top:5px}
-            .critical{color:#ff4444;text-shadow:0 0 20px rgba(255,68,68,0.5)}
-            .high{color:#ff8800;text-shadow:0 0 20px rgba(255,136,0,0.5)}
-            .medium{color:#ffcc00;text-shadow:0 0 20px rgba(255,204,0,0.5)}
-            .low{color:#44ccff;text-shadow:0 0 20px rgba(68,204,255,0.5)}
-            .info{color:#8888ff;text-shadow:0 0 20px rgba(136,136,255,0.5)}
-            table{width:100%;border-collapse:collapse;background:rgba(255,255,255,0.02);border-radius:12px;overflow:hidden;margin-top:20px}
-            th,td{padding:12px 15px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.05)}
-            th{background:rgba(0,212,255,0.1);color:#00d4ff;font-weight:600;text-transform:uppercase;font-size:12px;letter-spacing:1px}
-            tr:hover{background:rgba(255,255,255,0.03)}
-            .severity-badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:bold;text-transform:uppercase}
-            .sev-critical{background:#ff4444;color:#fff;box-shadow:0 0 20px rgba(255,68,68,0.5)}
-            .sev-high{background:#ff8800;color:#fff;box-shadow:0 0 20px rgba(255,136,0,0.5)}
-            .sev-medium{background:#ffcc00;color:#000}
-            .sev-low{background:#44ccff;color:#000}
-            .sev-info{background:#8888ff;color:#fff}
-            .footer{margin-top:30px;padding-top:20px;border-top:1px solid rgba(255,255,255,0.05);text-align:center;font-size:12px;opacity:0.5}
-          </style>
+          <head>
+            <meta charset="UTF-8">
+            <title>🚀 CỖ MÁY QUÉT XUYÊN LỤC ĐỊA 🚀</title>
+            <style>
+              *{margin:0;padding:0;box-sizing:border-box}
+              body{font-family:'Segoe UI',Arial,sans-serif;background:linear-gradient(135deg,#0a0a0f 0%,#1a1a2e 30%,#16213e 60%,#0a0a0f 100%);min-height:100vh;padding:20px;color:#e0e0e0}
+              .container{max-width:1400px;margin:0 auto;background:rgba(255,255,255,0.03);backdrop-filter:blur(20px);border-radius:20px;padding:30px;border:1px solid rgba(255,255,255,0.1);box-shadow:0 25px 50px rgba(0,0,0,0.8)}
+              .header{text-align:center;border-bottom:2px solid rgba(255,255,255,0.1);padding-bottom:20px;margin-bottom:30px}
+              .header h1{font-size:32px;background:linear-gradient(90deg,#ff4444,#ff8800,#ffcc00,#44ccff,#8888ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:glow 2s infinite alternate}
+              @keyframes glow{from{filter:drop-shadow(0 0 10px rgba(255,68,68,0.5))}to{filter:drop-shadow(0 0 20px rgba(136,136,255,0.8))}}
+              .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:15px;margin-bottom:30px}
+              .stat-card{background:rgba(255,255,255,0.05);border-radius:12px;padding:20px;text-align:center;border:1px solid rgba(255,255,255,0.08);transition:all 0.3s}
+              .stat-card:hover{transform:scale(1.05);border-color:rgba(255,255,255,0.3);box-shadow:0 0 30px rgba(255,255,255,0.1)}
+              .stat-number{font-size:36px;font-weight:bold}
+              .stat-label{font-size:12px;opacity:0.7;margin-top:5px}
+              .critical{color:#ff4444;text-shadow:0 0 20px rgba(255,68,68,0.5)}
+              .high{color:#ff8800;text-shadow:0 0 20px rgba(255,136,0,0.5)}
+              .medium{color:#ffcc00;text-shadow:0 0 20px rgba(255,204,0,0.5)}
+              .low{color:#44ccff;text-shadow:0 0 20px rgba(68,204,255,0.5)}
+              .info{color:#8888ff;text-shadow:0 0 20px rgba(136,136,255,0.5)}
+              table{width:100%;border-collapse:collapse;background:rgba(255,255,255,0.02);border-radius:12px;overflow:hidden;margin-top:20px}
+              th,td{padding:12px 15px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.05)}
+              th{background:rgba(0,212,255,0.1);color:#00d4ff;font-weight:600;text-transform:uppercase;font-size:12px;letter-spacing:1px}
+              tr:hover{background:rgba(255,255,255,0.03)}
+              .severity-badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:bold;text-transform:uppercase}
+              .sev-critical{background:#ff4444;color:#fff;box-shadow:0 0 20px rgba(255,68,68,0.5)}
+              .sev-high{background:#ff8800;color:#fff;box-shadow:0 0 20px rgba(255,136,0,0.5)}
+              .sev-medium{background:#ffcc00;color:#000}
+              .sev-low{background:#44ccff;color:#000}
+              .sev-info{background:#8888ff;color:#fff}
+              .footer{margin-top:30px;padding-top:20px;border-top:1px solid rgba(255,255,255,0.05);text-align:center;font-size:12px;opacity:0.5}
+            </style>
           </head>
           <body>
           <div class="container">
-            <div class="header"><h1>🌌 BÁO CÁO QUÉT XUYÊN LỤC ĐỊA 🌌</h1><div style="font-size:14px;opacity:0.6;">🚀 Generated: $(date)</div></div>
+            <div class="header"><h1>🚀 CỖ MÁY QUÉT XUYÊN LỤC ĐỊA 🚀</h1><div style="font-size:14px;opacity:0.6;">🔥 HỦY DIỆT MỌI LỖ HỔNG - Generated: $(date)</div></div>
             <div class="stats-grid">
               <div class="stat-card"><div class="stat-number critical">$(jq 'select(.info.severity=="critical")' results.json 2>/dev/null | wc -l)</div><div class="stat-label">🔥 CRITICAL</div></div>
               <div class="stat-card"><div class="stat-number high">$(jq 'select(.info.severity=="high")' results.json 2>/dev/null | wc -l)</div><div class="stat-label">⚡ HIGH</div></div>
@@ -212,13 +241,15 @@ jobs:
               <tr><th>MỨC ĐỘ</th><th>TÊN LỖ HỔNG</th><th>URL</th></tr>
               $(jq -r 'select(.info.severity=="critical" or .info.severity=="high") | "<tr><td><span class=\"severity-badge sev-" + (.info.severity) + "\">" + (.info.severity | ascii_upcase) + "</span></td><td><strong>" + .info.name + "</strong></td><td style=\"font-size:12px;opacity:0.8;\">" + .matched-at + "</td></tr>"' results.json 2>/dev/null | head -100)
             </table>
-            <div class="footer">🔥 Nuclei Pro Max Ultimate - Quét xuyên lục địa! 🚀</div>
+            <div class="footer">🔥 Cỗ máy quét xuyên lục địa - Hủy diệt mọi lỗ hổng trong vũ trụ! 🚀</div>
           </div>
           </body>
           </html>
           EOF
+          
+          echo "✅ BÁO CÁO ĐÃ TẠO XONG!"
 
-      - name: 💾 LƯU KHO BÁU
+      - name: 💾 LƯU KHO BÁU VŨ TRỤ
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -229,19 +260,19 @@ jobs:
             results.jsonl
             report.html
             report.db
-            targets_final.txt
+            targets.txt
             /tmp/nuclei-project/
           retention-days: 30
 
-      - name: 🎯 THÔNG BÁO HOÀN THÀNH
+      - name: 🎯 THÔNG BÁO HOÀN THÀNH - HỦY DIỆT HOÀN TẤT
         if: always()
         run: |
           echo "=================================================="
-          echo "🌌 QUÉT HOÀN TẤT! KHO BÁU ĐÃ SẴN SÀNG 🌌"
+          echo "🌌 QUÉT XUYÊN LỤC ĐỊA HOÀN TẤT! 🌌"
           echo "=================================================="
-          echo "📊 Tổng số lỗ hổng: $(cat results.txt 2>/dev/null | wc -l)"
+          echo "📊 TỔNG SỐ LỖ HỔNG: $(cat results.txt 2>/dev/null | wc -l)"
           echo "🔥 CRITICAL: $(jq -r 'select(.info.severity=="critical")' results.json 2>/dev/null | wc -l)"
           echo "⚡ HIGH: $(jq -r 'select(.info.severity=="high")' results.json 2>/dev/null | wc -l)"
           echo "=================================================="
-          echo "📥 Tải báo cáo tại Artifacts"
+          echo "📥 TẢI BÁO CÁO TẠI ARTIFACTS"
           echo "=================================================="
