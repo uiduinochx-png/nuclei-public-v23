@@ -1,523 +1,63 @@
-name: "👑 CHỦ NHÂN VŨ TRỤ - SĂN LỖI GIÁ TRỊ"
+name: "Nuclei Engine 24/7 Pro"
 
 on:
   workflow_dispatch:
-    inputs:
-      severity_level:
-        description: '📊 MỨC ĐỘ LỖ HỔNG'
-        required: false
-        default: 'critical,high,medium'
-        type: choice
-        options:
-          - critical,high
-          - critical,high,medium
-          - critical,high,medium,low
-          - critical,high,medium,low,info
   schedule:
-    - cron: '0 */3 * * *'
+    - cron: '0 */6 * * *'
 
 jobs:
-  ultimate-scan:
+  nuclei-scan:
     runs-on: ubuntu-latest
+    container:
+      image: projectdiscovery/nuclei:latest
 
     steps:
-      - name: 📥 TẢI MÃ NGUỒN
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: 📦 CÀI ĐẶT CÔNG CỤ
+      - name: Run Nuclei Scan
         run: |
-          echo "🔥 ĐANG CÀI ĐẶT CÔNG CỤ..."
+          echo "START SCAN: $(date)"
+          echo "TARGETS: $(cat targets.txt | wc -l) websites"
+          echo ""
           
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq \
-            jq curl git python3 python3-pip \
-            massdns dnsrecon dnsenum \
-            nmap ffuf unzip wget \
-            && sudo rm -rf /var/lib/apt/lists/*
-          
-          # Cài Go
-          wget -q https://go.dev/dl/go1.21.5.linux-amd64.tar.gz
-          sudo tar -C /usr/local -xzf go1.21.5.linux-amd64.tar.gz
-          rm go1.21.5.linux-amd64.tar.gz
-          export PATH=$PATH:/usr/local/go/bin
-          echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
-          
-          # Cài nuclei
-          echo "📥 ĐANG TẢI NUCLEI..."
-          curl -s https://api.github.com/repos/projectdiscovery/nuclei/releases/latest | \
-            grep "browser_download_url.*linux-amd64.zip" | cut -d '"' -f 4 | wget -qi -
-          unzip -q nuclei_*_linux_amd64.zip
-          sudo mv nuclei /usr/local/bin/
-          sudo chmod +x /usr/local/bin/nuclei
-          rm nuclei_*_linux_amd64.zip
-          
-          # Cài python packages
-          pip3 install -q requests beautifulsoup4 lxml
-          
-          # Cập nhật templates
-          nuclei -update-templates -silent
-          nuclei -templates-version
-          
-          mkdir -p /tmp/ultimate-templates
-          
-          echo "📥 ĐANG TẢI TEMPLATE..."
-          git clone --depth 1 -q https://github.com/geeknik/nuclei-templates.git /tmp/ultimate-templates/geeknik 2>/dev/null || echo "⚠️ Không clone được geeknik"
-          git clone --depth 1 -q https://github.com/notnotnotveg/nuclei-templates.git /tmp/ultimate-templates/extra 2>/dev/null || echo "⚠️ Không clone được extra"
-          git clone --depth 1 -q https://github.com/random-robbie/nuclei-templates.git /tmp/ultimate-templates/random 2>/dev/null || echo "⚠️ Không clone được random"
-          git clone --depth 1 -q https://github.com/projectdiscovery/nuclei-templates.git /tmp/ultimate-templates/official 2>/dev/null || echo "⚠️ Không clone được official"
-          
-          echo "✅ CÀI ĐẶT HOÀN TẤT!"
-
-      - name: 👑 LẤY 20 WEB NHIỀU LỖI NHẤT
-        id: get_targets
-        run: |
-          echo "🌌 CHỦ NHÂN VŨ TRỤ ĐANG TÌM MỤC TIÊU..."
-          
-          if [ ! -f history.json ]; then
-              echo '{"scanned": [], "high_value": []}' > history.json
-          fi
-          
-          cat > target_finder.py << 'PYEOF'
-          import json, re, requests, random, time
-          from bs4 import BeautifulSoup
-          
-          try:
-              with open('history.json', 'r') as f:
-                  history = json.load(f)
-          except:
-              history = {'scanned': [], 'high_value': []}
-          
-          all_targets = []
-          seen = set()
-          
-          print("="*70)
-          print("👑 CHỦ NHÂN VŨ TRỤ - TÌM WEB NHIỀU LỖI GIÁ TRỊ")
-          print("="*70)
-          print(f"📊 WEB ĐÃ QUÉT: {len(history['scanned'])}")
-          print(f"📊 WEB GIÁ TRỊ CAO: {len(history['high_value'])}")
-          print("="*70)
-          
-          # ============================================
-          # DANH SÁCH WEB GIÁ TRỊ CAO - LUÔN CÓ
-          # ============================================
-          high_value_websites = [
-              ('wordpress.com', 'CRITICAL - SQLi/RCE'),
-              ('joomla.org', 'CRITICAL - SQLi/RCE'),
-              ('drupal.org', 'CRITICAL - RCE'),
-              ('magento.com', 'CRITICAL - SQLi/RCE'),
-              ('shopify.com', 'CRITICAL - RCE'),
-              ('laravel.com', 'CRITICAL - RCE/CVE'),
-              ('djangoproject.com', 'CRITICAL - RCE/CVE'),
-              ('rubyonrails.org', 'CRITICAL - RCE/CVE'),
-              ('spring.io', 'CRITICAL - RCE/CVE'),
-              ('stripe.com', 'CRITICAL - Payment'),
-              ('paypal.com', 'CRITICAL - Payment'),
-              ('coinbase.com', 'CRITICAL - Crypto'),
-              ('binance.com', 'CRITICAL - Crypto'),
-              ('uniswap.org', 'CRITICAL - Smart Contract'),
-              ('chain.link', 'CRITICAL - Oracle'),
-              ('aave.com', 'CRITICAL - Lending'),
-              ('github.com', 'CRITICAL - API'),
-              ('gitlab.com', 'CRITICAL - CI/CD'),
-              ('aws.amazon.com', 'CRITICAL - Cloud'),
-              ('azure.microsoft.com', 'CRITICAL - Cloud'),
-              ('cloud.google.com', 'CRITICAL - Cloud'),
-              ('amazon.com', 'CRITICAL - Payment'),
-              ('booking.com', 'CRITICAL - Booking'),
-              ('airbnb.com', 'CRITICAL - Reservation'),
-              ('reddit.com', 'CRITICAL - API'),
-              ('discord.com', 'CRITICAL - API'),
-              ('telegram.org', 'CRITICAL - Bot'),
-              ('compound.finance', 'CRITICAL - Lending'),
-              ('gmx.io', 'CRITICAL - Trading'),
-              ('morpho.org', 'CRITICAL - Lending'),
-              ('injective.com', 'CRITICAL - Trading'),
-              ('sky.money', 'CRITICAL - Stablecoin'),
-              ('layerzero.com', 'CRITICAL - Cross-chain'),
-              ('wormhole.com', 'CRITICAL - Cross-chain'),
-              ('aptosfoundation.org', 'CRITICAL - Blockchain'),
-              ('near.org', 'CRITICAL - Blockchain'),
-          ]
-          
-          high_value_domains = [d for d, _ in high_value_websites]
-          for domain, desc in high_value_websites:
-              if domain not in seen:
-                  seen.add(domain)
-                  all_targets.append({
-                      'domain': domain,
-                      'source': desc,
-                      'type': 'HighValue',
-                      'priority': 1
-                  })
-                  if domain not in history['high_value']:
-                      history['high_value'].append(domain)
-          
-          # ============================================
-          # LẤY TỪ HACKERONE
-          # ============================================
-          print("\n🔍 ĐANG LẤY WEB TỪ HACKERONE...")
-          try:
-              r = requests.get('https://hackerone.com/programs/search?query=type:public', timeout=15, headers={'User-Agent': 'Mozilla/5.0'})
-              if r.status_code == 200:
-                  soup = BeautifulSoup(r.text, 'html.parser')
-                  count = 0
-                  for link in soup.find_all('a', href=True):
-                      if count >= 15:
-                          break
-                      href = link['href']
-                      if '/programs/' in href and 'hackerone.com' not in href:
-                          parts = href.split('/')
-                          for part in parts:
-                              domain = part.strip().lower()
-                              if '.' in domain and len(domain) > 5 and not domain.startswith('http'):
-                                  if domain not in seen and len(domain) < 50:
-                                      seen.add(domain)
-                                      all_targets.append({
-                                          'domain': domain,
-                                          'source': 'HackerOne',
-                                          'type': 'BugBounty',
-                                          'priority': 3
-                                      })
-                                      count += 1
-          except Exception as e:
-              print(f"⚠️ Lỗi HackerOne: {e}")
-          
-          # ============================================
-          # LẤY TỪ BUGCROWD
-          # ============================================
-          print("\n🔍 ĐANG LẤY WEB TỪ BUGCROWD...")
-          try:
-              r = requests.get('https://bugcrowd.com/programs', timeout=15, headers={'User-Agent': 'Mozilla/5.0'})
-              if r.status_code == 200:
-                  soup = BeautifulSoup(r.text, 'html.parser')
-                  count = 0
-                  for item in soup.find_all(['a', 'div'], class_=True):
-                      if count >= 15:
-                          break
-                      text = item.text.strip()
-                      if '.' in text and len(text) > 5 and ' ' not in text:
-                          domain = text.lower().strip()
-                          if domain and domain not in seen and len(domain) < 50:
-                              if not any(x in domain for x in ['bugcrowd', 'hackerone', 'immunefi']):
-                                  seen.add(domain)
-                                  all_targets.append({
-                                      'domain': domain,
-                                      'source': 'Bugcrowd',
-                                      'type': 'BugBounty',
-                                      'priority': 3
-                                  })
-                                  count += 1
-          except Exception as e:
-              print(f"⚠️ Lỗi Bugcrowd: {e}")
-          
-          # ============================================
-          # LẤY TỪ IMMUNEFI
-          # ============================================
-          print("\n🔍 ĐANG LẤY WEB TỪ IMMUNEFI...")
-          try:
-              r = requests.get('https://immunefi.com/explore/', timeout=15, headers={'User-Agent': 'Mozilla/5.0'})
-              if r.status_code == 200:
-                  soup = BeautifulSoup(r.text, 'html.parser')
-                  count = 0
-                  for link in soup.find_all('a', href=True):
-                      if count >= 10:
-                          break
-                      href = link['href']
-                      if '/bounty/' in href and 'immunefi.com' not in href:
-                          parts = href.split('/')
-                          for part in parts:
-                              domain = part.strip().lower()
-                              if '.' in domain and len(domain) > 5:
-                                  if domain not in seen:
-                                      seen.add(domain)
-                                      all_targets.append({
-                                          'domain': domain,
-                                          'source': 'Immunefi',
-                                          'type': 'Web3',
-                                          'priority': 2
-                                      })
-                                      count += 1
-          except Exception as e:
-              print(f"⚠️ Lỗi Immunefi: {e}")
-          
-          # ============================================
-          # CHỌN 20 WEB
-          # ============================================
-          print("\n👑 CHỌN 20 WEB NHIỀU LỖI NHẤT...")
-          
-          priority_1 = [t for t in all_targets if t['priority'] == 1]
-          priority_2 = [t for t in all_targets if t['priority'] == 2]
-          priority_3 = [t for t in all_targets if t['priority'] == 3]
-          
-          random.shuffle(priority_1)
-          random.shuffle(priority_2)
-          random.shuffle(priority_3)
-          
-          selected = priority_1[:12] + priority_2[:5] + priority_3[:3]
-          
-          if len(selected) < 20:
-              selected += priority_2[:20-len(selected)]
-          if len(selected) < 20:
-              selected += priority_3[:20-len(selected)]
-          
-          random.shuffle(selected)
-          selected = selected[:20]
-          
-          for t in selected:
-              if t['domain'] not in history['scanned']:
-                  history['scanned'].append(t['domain'])
-          
-          with open('history.json', 'w') as f:
-              json.dump(history, f, indent=2)
-          
-          with open('targets.txt', 'w') as f:
-              for t in selected:
-                  domain = t['domain']
-                  if not domain.startswith('http'):
-                      domain = 'https://' + domain
-                  f.write(f"{domain}  # {t['source']}\n")
-          
-          print("\n" + "="*70)
-          print("👑 20 WEB NHIỀU LỖI GIÁ TRỊ NHẤT:")
-          print("="*70)
-          for i, t in enumerate(selected, 1):
-              icon = "💎" if t['priority'] == 1 else ("🔶" if t['priority'] == 2 else "🔹")
-              print(f"{i:2}. {icon} {t['domain']:35} → {t['source']}")
-          print("="*70)
-          print(f"✅ TỔNG: {len(selected)} WEB")
-          print("="*70)
-          PYEOF
-          
-          python3 target_finder.py
-          
-          if [ ! -s targets.txt ]; then
-              echo "⚠️ KHÔNG TÌM THẤY MỤC TIÊU! DÙNG DANH SÁCH DỰ PHÒNG..."
-              cat > targets.txt << 'EOF'
-          https://wordpress.com
-          https://joomla.org
-          https://drupal.org
-          https://magento.com
-          https://shopify.com
-          https://laravel.com
-          https://djangoproject.com
-          https://rubyonrails.org
-          https://spring.io
-          https://stripe.com
-          https://paypal.com
-          https://coinbase.com
-          https://binance.com
-          https://uniswap.org
-          https://chain.link
-          https://aave.com
-          https://github.com
-          https://gitlab.com
-          https://aws.amazon.com
-          https://azure.microsoft.com
-          EOF
-          fi
-          
-          TARGET_COUNT=$(wc -l < targets.txt)
-          echo "🎯 SỐ MỤC TIÊU: $TARGET_COUNT"
-          echo "target_count=$TARGET_COUNT" >> $GITHUB_ENV
-          
-          echo "📋 DANH SÁCH WEB:"
-          cat targets.txt
-
-      - name: 🔍 QUÉT XUYÊN LỤC ĐỊA
-        timeout-minutes: 120
-        run: |
-          echo "⏰ BẮT ĐẦU: $(date)"
-          echo "🎯 MỤC TIÊU: ${{ env.target_count }}"
-          echo "📊 MỨC ĐỘ: ${{ github.event.inputs.severity_level || 'critical,high,medium' }}"
-          
-          nuclei \
-            -list targets.txt \
-            -severity ${{ github.event.inputs.severity_level || 'critical,high,medium' }} \
-            -t /tmp/ultimate-templates/ \
-            -t /tmp/ultimate-templates/geeknik/ \
-            -t /tmp/ultimate-templates/extra/ \
-            -t /tmp/ultimate-templates/random/ \
-            -t /tmp/ultimate-templates/official/ \
-            -c 150 \
-            -bulk-size 50 \
+          nuclei -list targets.txt \
+            -severity critical,high,medium \
+            -c 30 \
             -rate-limit 100 \
-            -timeout 15 \
-            -retries 2 \
-            -max-redirects 5 \
-            -follow-redirects \
-            -scan-all-ips \
-            -subdomain \
-            -pt http,https,dns,network,tcp,ssl,whois \
-            -tags cve,kev,osint,exposure,wordpress,drupal,joomla,magento,opensource,aws,azure,gcp,cloud,apache,tomcat,nginx,iis,spring,laravel,django,rails,react,angular,vue,graphql,rest,soap,webcache,webmin \
-            -exclude-tags "miscellaneous,takeover,panel" \
-            -show-match \
+            -bulk-size 20 \
+            -timeout 20 \
+            -retries 3 \
             -stats \
-            -stats-interval 10 \
-            -rdb report.db \
             -json-export results.json \
-            -jle results.jsonl \
             -o results.txt \
-            -no-interactsh \
-            -disable-update-check \
-            -max-host-error 20 \
-            -verify \
-            -silent \
-            -no-mhe \
-            -project \
-            -project-path /tmp/nuclei-project \
-            2>/dev/null || true
-          
-          echo "✅ HOÀN TẤT: $(date)"
+            -silent
 
-      - name: 📊 THỐNG KÊ KẾT QUẢ
-        run: |
-          if [ ! -f results.json ]; then
-            echo '[]' > results.json
-            echo '[]' > results.jsonl
-            touch results.txt
-            exit 0
-          fi
-          
-          CRITICAL=$(jq -r 'select(.info.severity=="critical")' results.json 2>/dev/null | wc -l)
-          HIGH=$(jq -r 'select(.info.severity=="high")' results.json 2>/dev/null | wc -l)
-          MEDIUM=$(jq -r 'select(.info.severity=="medium")' results.json 2>/dev/null | wc -l)
-          LOW=$(jq -r 'select(.info.severity=="low")' results.json 2>/dev/null | wc -l)
-          INFO=$(jq -r 'select(.info.severity=="info")' results.json 2>/dev/null | wc -l)
-          TOTAL=$(cat results.txt 2>/dev/null | wc -l)
-          
-          echo "=================================================="
-          echo "👑 KẾT QUẢ QUÉT"
-          echo "=================================================="
-          echo "🔥 CRITICAL: $CRITICAL"
-          echo "⚡ HIGH: $HIGH"
-          echo "🟡 MEDIUM: $MEDIUM"
-          echo "🟢 LOW: $LOW"
-          echo "ℹ️ INFO: $INFO"
-          echo "📦 TỔNG: $TOTAL"
-          echo "=================================================="
-          
-          if [ $TOTAL -gt 0 ]; then
-            echo ""
-            echo "🔥 CRITICAL:"
-            jq -r 'select(.info.severity=="critical") | "[🔥] " + .info.name + " → " + .matched-at' results.json 2>/dev/null | head -20
-            echo ""
-            echo "⚡ HIGH:"
-            jq -r 'select(.info.severity=="high") | "[⚡] " + .info.name + " → " + .matched-at' results.json 2>/dev/null | head -20
-          fi
-
-      - name: 📄 TẠO BÁO CÁO
+      - name: Show Results
         if: always()
         run: |
-          cat > report.html << 'EOF'
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="UTF-8">
-            <title>👑 CHỦ NHÂN VŨ TRỤ</title>
-            <style>
-              *{margin:0;padding:0;box-sizing:border-box}
-              body{font-family:'Segoe UI',Arial,sans-serif;background:radial-gradient(ellipse at center,#0a0a0f 0%,#1a0a2e 30%,#0a0a0f 100%);min-height:100vh;padding:20px;color:#e0e0e0}
-              .container{max-width:1400px;margin:0 auto;background:rgba(255,255,255,0.03);backdrop-filter:blur(20px);border-radius:20px;padding:30px;border:2px solid rgba(255,215,0,0.3);box-shadow:0 0 100px rgba(255,215,0,0.1)}
-              .header{text-align:center;border-bottom:2px solid rgba(255,215,0,0.2);padding-bottom:20px;margin-bottom:30px}
-              .header h1{font-size:36px;background:linear-gradient(90deg,#ffd700,#ff6b00,#ffd700,#ff6b00);-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:crownGlow 3s infinite alternate}
-              @keyframes crownGlow{0%{filter:drop-shadow(0 0 20px rgba(255,215,0,0.5))}50%{filter:drop-shadow(0 0 60px rgba(255,215,0,0.8))}100%{filter:drop-shadow(0 0 20px rgba(255,215,0,0.5))}}
-              .header .sub{font-size:16px;color:#ffd700;opacity:0.8;margin-top:5px}
-              .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:15px;margin-bottom:30px}
-              .stat-card{background:rgba(255,255,255,0.05);border-radius:12px;padding:20px;text-align:center;border:1px solid rgba(255,215,0,0.1);transition:all 0.3s}
-              .stat-card:hover{transform:scale(1.05);border-color:#ffd700;box-shadow:0 0 40px rgba(255,215,0,0.2)}
-              .stat-number{font-size:32px;font-weight:bold}
-              .stat-label{font-size:12px;opacity:0.7;margin-top:5px}
-              .critical{color:#ff4444;text-shadow:0 0 30px rgba(255,68,68,0.6)}
-              .high{color:#ff8800;text-shadow:0 0 30px rgba(255,136,0,0.6)}
-              .medium{color:#ffcc00;text-shadow:0 0 30px rgba(255,204,0,0.6)}
-              .low{color:#44ccff;text-shadow:0 0 30px rgba(68,204,255,0.6)}
-              .info{color:#8888ff;text-shadow:0 0 30px rgba(136,136,255,0.6)}
-              .total{color:#ffd700;text-shadow:0 0 40px rgba(255,215,0,0.6)}
-              table{width:100%;border-collapse:collapse;background:rgba(255,255,255,0.02);border-radius:12px;overflow:hidden;margin-top:20px;border:1px solid rgba(255,215,0,0.1)}
-              th,td{padding:12px 15px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.05)}
-              th{background:rgba(255,215,0,0.1);color:#ffd700;font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:2px}
-              tr:hover{background:rgba(255,215,0,0.05)}
-              .sev-badge{display:inline-block;padding:3px 12px;border-radius:20px;font-size:10px;font-weight:bold;text-transform:uppercase}
-              .sev-critical{background:#ff4444;color:#fff;box-shadow:0 0 20px rgba(255,68,68,0.5)}
-              .sev-high{background:#ff8800;color:#fff;box-shadow:0 0 20px rgba(255,136,0,0.5)}
-              .sev-medium{background:#ffcc00;color:#000}
-              .sev-low{background:#44ccff;color:#000}
-              .sev-info{background:#8888ff;color:#fff}
-              .footer{margin-top:30px;padding-top:15px;border-top:1px solid rgba(255,215,0,0.1);text-align:center;font-size:11px;opacity:0.4;color:#ffd700}
-              .loading{text-align:center;padding:40px;color:#ffd700}
-              .empty{text-align:center;padding:30px;opacity:0.5;color:#ffd700}
-            </style>
-          </head>
-          <body>
-          <div class="container">
-            <div class="header">
-              <h1>👑 CHỦ NHÂN VŨ TRỤ</h1>
-              <div class="sub">🔥 LỖI GIÁ TRỊ - CHƯA VÁ</div>
-            </div>
-            <div class="stats-grid">
-              <div class="stat-card"><div class="stat-number critical" id="critical">...</div><div class="stat-label">🔥 CRITICAL</div></div>
-              <div class="stat-card"><div class="stat-number high" id="high">...</div><div class="stat-label">⚡ HIGH</div></div>
-              <div class="stat-card"><div class="stat-number medium" id="medium">...</div><div class="stat-label">🟡 MEDIUM</div></div>
-              <div class="stat-card"><div class="stat-number low" id="low">...</div><div class="stat-label">🟢 LOW</div></div>
-              <div class="stat-card"><div class="stat-number info" id="info">...</div><div class="stat-label">ℹ️ INFO</div></div>
-              <div class="stat-card"><div class="stat-number total" id="total">...</div><div class="stat-label">📦 TOTAL</div></div>
-            </div>
-            <h3 style="color:#ffd700;text-shadow:0 0 30px rgba(255,215,0,0.3);">🔥 KHO BÁU CRITICAL & HIGH</h3>
-            <div id="table-container"><div class="loading">⏳ ĐANG TẢI...</div></div>
-            <div class="footer">👑 Chủ nhân vũ trụ • All rights reserved</div>
-          </div>
-          <script>
-            fetch('results.json')
-              .then(res => res.json())
-              .then(data => {
-                const sev = {critical:[], high:[], medium:[], low:[], info:[]};
-                if (Array.isArray(data)) {
-                  data.forEach(item => {
-                    if (item.info && sev[item.info.severity]) sev[item.info.severity].push(item);
-                  });
-                }
-                document.getElementById('critical').textContent = sev.critical.length;
-                document.getElementById('high').textContent = sev.high.length;
-                document.getElementById('medium').textContent = sev.medium.length;
-                document.getElementById('low').textContent = sev.low.length;
-                document.getElementById('info').textContent = sev.info.length;
-                const total = sev.critical.length + sev.high.length + sev.medium.length + sev.low.length + sev.info.length;
-                document.getElementById('total').textContent = total;
-                const container = document.getElementById('table-container');
-                const items = [...sev.critical, ...sev.high];
-                if (items.length === 0) {
-                  container.innerHTML = '<div class="empty">💎 Chưa có lỗi Critical/High nào</div>';
-                  return;
-                }
-                let html = '<table><tr><th>MỨC ĐỘ</th><th>TÊN LỖ HỔNG</th><th>URL</th></tr>';
-                items.forEach(item => {
-                  const badge = `<span class="sev-badge sev-${item.info.severity}">${item.info.severity.toUpperCase()}</span>`;
-                  const url = item.matchedAt || item['matched-at'] || 'N/A';
-                  html += `<tr><td>${badge}</td><td><strong style="color:#ffd700;">${item.info.name}</strong></td><td style="font-size:12px;opacity:0.8;">${url}</td></tr>`;
-                });
-                html += '</table>';
-                container.innerHTML = html;
-              })
-              .catch(err => {
-                document.getElementById('table-container').innerHTML = `<div class="empty">❌ Lỗi: ${err.message}</div>`;
-              });
-          </script>
-          </body>
-          </html>
-          EOF
+          echo ""
+          echo "========== RESULTS =========="
+          echo ""
+          
+          if [ -f results.txt ]; then
+            echo "📦 TOTAL VULNS: $(cat results.txt | wc -l)"
+            echo ""
+            echo "📋 DETAILS:"
+            cat results.txt
+          else
+            echo "✅ NO VULNS FOUND"
+          fi
+          
+          echo ""
+          echo "========== END =========="
 
-      - name: 💾 LƯU KHO BÁU
+      - name: Upload Results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: scan-report-${{ github.run_id }}
+          name: nuclei-report
           path: |
             results.txt
             results.json
-            results.jsonl
-            report.html
-            report.db
-            targets.txt
-            history.json
-            /tmp/nuclei-project/
-          retention-days: 30
+          retention-days: 7
