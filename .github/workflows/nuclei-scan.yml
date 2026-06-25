@@ -1,17 +1,7 @@
-name: "Nuclei Engine 24/7 Pro - Tối Ưu"
+name: "Nuclei Engine 24/7 Pro"
 
 on:
   workflow_dispatch:
-    inputs:
-      scan_mode:
-        description: '🚀 CHẾ ĐỘ QUÉT'
-        required: false
-        default: 'fast'
-        type: choice
-        options:
-          - fast
-          - deep
-          - ultimate
   schedule:
     - cron: '0 */6 * * *'
 
@@ -25,162 +15,25 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: 🔥 NUCLEI SCAN - TỐI ƯU
+      - name: Run Nuclei Scan
         run: |
-          echo "╔══════════════════════════════════════════════════════════════════════════════╗"
-          echo "║     🧠 NUCLEI ENGINE 24/7 PRO - TỐI ƯU KIẾM TIỀN                       ║"
-          echo "╚══════════════════════════════════════════════════════════════════════════════╝"
+          echo "START SCAN: $(date)"
+          echo "TARGETS: $(cat targets.txt | wc -l) websites"
           echo ""
           
-          case "${{ github.event.inputs.scan_mode || 'fast' }}" in
-            fast)
-              CONCURRENCY=50
-              BULK=30
-              RATE=150
-              TIMEOUT=15
-              RETRIES=3
-              echo "⚡ CHẾ ĐỘ NHANH - QUÉT LỖI PHỔ BIẾN"
-              ;;
-            deep)
-              CONCURRENCY=30
-              BULK=20
-              RATE=80
-              TIMEOUT=30
-              RETRIES=5
-              echo "🔍 CHẾ ĐỘ SÂU - QUÉT TOÀN DIỆN"
-              ;;
-            ultimate)
-              CONCURRENCY=20
-              BULK=15
-              RATE=50
-              TIMEOUT=45
-              RETRIES=6
-              echo "💀 CHẾ ĐỘ TỐI ĐA - QUÉT TỪNG NGÕ NGÁCH"
-              ;;
-          esac
-          
-          echo "🎯 TARGETS: $(cat targets.txt | wc -l) websites"
-          echo "⚙️ CONCURRENCY: $CONCURRENCY"
-          echo "⚙️ RATE LIMIT: $RATE"
-          echo "⚙️ TIMEOUT: $TIMEOUT"
-          echo ""
-
-          # ===== QUÉT LỖI CÓ TIỀN (CRITICAL + HIGH) =====
-          echo "🔥 QUÉT LỖI NGHIÊM TRỌNG (CRITICAL + HIGH)..."
           nuclei -list targets.txt \
-            -severity critical,high \
-            -c $CONCURRENCY \
-            -rate-limit $RATE \
-            -bulk-size $BULK \
-            -timeout $TIMEOUT \
-            -retries $RETRIES \
-            -max-redirects 15 \
+            -severity critical,high,medium \
+            -c 30 \
+            -rate-limit 100 \
+            -bulk-size 20 \
+            -timeout 20 \
+            -retries 3 \
             -stats \
-            -stats-interval 10 \
-            -json-export critical_high.json \
-            -o critical_high.txt \
-            -no-interactsh \
-            -silent \
-            -no-color 2>&1 | tee scan.log
+            -json-export results.json \
+            -o results.txt \
+            -silent
 
-          # ===== QUÉT LỖI MEDIUM (VẪN CÓ TIỀN) =====
-          echo ""
-          echo "🟡 QUÉT LỖI TRUNG BÌNH (MEDIUM)..."
-          nuclei -list targets.txt \
-            -severity medium \
-            -c $CONCURRENCY \
-            -rate-limit $RATE \
-            -bulk-size $BULK \
-            -timeout $TIMEOUT \
-            -retries $RETRIES \
-            -max-redirects 15 \
-            -json-export medium.json \
-            -o medium.txt \
-            -no-interactsh \
-            -silent \
-            -no-color 2>&1 | tee -a scan.log
-
-          # ===== GỘP KẾT QUẢ =====
-          echo ""
-          echo "📊 GỘP KẾT QUẢ..."
-          
-          # Gộp file text
-          > results.txt
-          [ -f critical_high.txt ] && cat critical_high.txt >> results.txt
-          [ -f medium.txt ] && cat medium.txt >> results.txt
-          
-          # Gộp JSON
-          echo '[' > results.json
-          FIRST=1
-          if [ -f critical_high.json ] && [ -s critical_high.json ]; then
-            if [ "$(cat critical_high.json)" != "null" ] && [ "$(cat critical_high.json)" != "[]" ]; then
-              cat critical_high.json >> results.json
-              FIRST=0
-            fi
-          fi
-          if [ -f medium.json ] && [ -s medium.json ]; then
-            if [ "$(cat medium.json)" != "null" ] && [ "$(cat medium.json)" != "[]" ]; then
-              if [ $FIRST -eq 0 ]; then
-                echo ',' >> results.json
-              fi
-              cat medium.json >> results.json
-              FIRST=0
-            fi
-          fi
-          echo ']' >> results.json
-
-      - name: 📊 BÁO CÁO CHI TIẾT - PHÂN LOẠI TIỀN
-        if: always()
-        run: |
-          echo ""
-          echo "════════════════════════════════════════════════════════════════════════════════"
-          echo "📋 BÁO CÁO KẾT QUẢ QUÉT - PHÂN LOẠI THEO GIÁ TRỊ"
-          echo "════════════════════════════════════════════════════════════════════════════════"
-          echo ""
-          
-          # === ĐẾM SỐ LƯỢNG (DÙNG GREP AN TOÀN) ===
-          TOTAL=$(cat results.txt 2>/dev/null | wc -l || echo 0)
-          TOTAL=${TOTAL:-0}
-          
-          CRITICAL=$(grep -c "critical" results.txt 2>/dev/null || echo 0)
-          CRITICAL=${CRITICAL:-0}
-          
-          HIGH=$(grep -c "high" results.txt 2>/dev/null || echo 0)
-          HIGH=${HIGH:-0}
-          
-          MEDIUM=$(grep -c "medium" results.txt 2>/dev/null || echo 0)
-          MEDIUM=${MEDIUM:-0}
-          
-          # === TÍNH BOUNTY (KIỂM TRA SỐ HỢP LỆ) ===
-          BOUNTY_CRITICAL=$((CRITICAL * 5000))
-          BOUNTY_HIGH=$((HIGH * 1000))
-          BOUNTY_MEDIUM=$((MEDIUM * 200))
-          TOTAL_BOUNTY=$((BOUNTY_CRITICAL + BOUNTY_HIGH + BOUNTY_MEDIUM))
-          
-          echo "📦 TỔNG LỖI: $TOTAL"
-          echo ""
-          echo "💰 PHÂN LOẠI THEO TIỀN:"
-          echo "─────────────────────────────────────────"
-          echo "🔥 CRITICAL: $CRITICAL lỗi × \$5,000 = \$${BOUNTY_CRITICAL:-0}"
-          echo "⚡ HIGH: $HIGH lỗi × \$1,000 = \$${BOUNTY_HIGH:-0}"
-          echo "🟡 MEDIUM: $MEDIUM lỗi × \$200 = \$${BOUNTY_MEDIUM:-0}"
-          echo ""
-          echo "💰 TỔNG BOUNTY TIỀM NĂNG: \$${TOTAL_BOUNTY:-0}"
-          echo ""
-          
-          # === HIỂN THỊ TOP LỖI ===
-          if [ "$TOTAL" -gt 0 ]; then
-            echo "🔥 DANH SÁCH LỖI PHÁT HIỆN:"
-            echo "─────────────────────────────────────────"
-            head -20 results.txt
-          else
-            echo "✅ KHÔNG CÓ LỖI NÀO"
-          fi
-          
-          echo ""
-          echo "════════════════════════════════════════════════════════════════════════════════"
-
-      - name: 💾 LƯU KẾT QUẢ
+      - name: Upload Results
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -188,7 +41,4 @@ jobs:
           path: |
             results.txt
             results.json
-            critical_high.txt
-            medium.txt
-            scan.log
           retention-days: 14
