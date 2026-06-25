@@ -32,7 +32,6 @@ jobs:
           echo "╚══════════════════════════════════════════════════════════════════════════════╝"
           echo ""
           
-          # ===== CẤU HÌNH THEO CHẾ ĐỘ =====
           case "${{ github.event.inputs.scan_mode || 'fast' }}" in
             fast)
               CONCURRENCY=50
@@ -104,18 +103,29 @@ jobs:
           # ===== GỘP KẾT QUẢ =====
           echo ""
           echo "📊 GỘP KẾT QUẢ..."
-          cat critical_high.txt medium.txt > results.txt 2>/dev/null || true
+          
+          # Gộp file text
+          > results.txt
+          [ -f critical_high.txt ] && cat critical_high.txt >> results.txt
+          [ -f medium.txt ] && cat medium.txt >> results.txt
           
           # Gộp JSON
           echo '[' > results.json
-          if [ -f critical_high.json ] && [ "$(cat critical_high.json)" != "null" ]; then
-            cat critical_high.json >> results.json
-          fi
-          if [ -f medium.json ] && [ "$(cat medium.json)" != "null" ]; then
-            if [ "$(cat critical_high.json)" != "null" ]; then
-              echo ',' >> results.json
+          FIRST=1
+          if [ -f critical_high.json ] && [ -s critical_high.json ]; then
+            if [ "$(cat critical_high.json)" != "null" ] && [ "$(cat critical_high.json)" != "[]" ]; then
+              cat critical_high.json >> results.json
+              FIRST=0
             fi
-            cat medium.json >> results.json
+          fi
+          if [ -f medium.json ] && [ -s medium.json ]; then
+            if [ "$(cat medium.json)" != "null" ] && [ "$(cat medium.json)" != "[]" ]; then
+              if [ $FIRST -eq 0 ]; then
+                echo ',' >> results.json
+              fi
+              cat medium.json >> results.json
+              FIRST=0
+            fi
           fi
           echo ']' >> results.json
 
@@ -128,13 +138,20 @@ jobs:
           echo "════════════════════════════════════════════════════════════════════════════════"
           echo ""
           
-          # === THỐNG KÊ ===
+          # === ĐẾM SỐ LƯỢNG (DÙNG GREP AN TOÀN) ===
           TOTAL=$(cat results.txt 2>/dev/null | wc -l || echo 0)
-          CRITICAL=$(grep -c "critical" results.txt 2>/dev/null || echo 0)
-          HIGH=$(grep -c "high" results.txt 2>/dev/null || echo 0)
-          MEDIUM=$(grep -c "medium" results.txt 2>/dev/null || echo 0)
+          TOTAL=${TOTAL:-0}
           
-          # === TÍNH BOUNTY ===
+          CRITICAL=$(grep -c "critical" results.txt 2>/dev/null || echo 0)
+          CRITICAL=${CRITICAL:-0}
+          
+          HIGH=$(grep -c "high" results.txt 2>/dev/null || echo 0)
+          HIGH=${HIGH:-0}
+          
+          MEDIUM=$(grep -c "medium" results.txt 2>/dev/null || echo 0)
+          MEDIUM=${MEDIUM:-0}
+          
+          # === TÍNH BOUNTY (KIỂM TRA SỐ HỢP LỆ) ===
           BOUNTY_CRITICAL=$((CRITICAL * 5000))
           BOUNTY_HIGH=$((HIGH * 1000))
           BOUNTY_MEDIUM=$((MEDIUM * 200))
@@ -144,20 +161,20 @@ jobs:
           echo ""
           echo "💰 PHÂN LOẠI THEO TIỀN:"
           echo "─────────────────────────────────────────"
-          echo "🔥 CRITICAL: $CRITICAL lỗi × \$5,000 = \$$BOUNTY_CRITICAL"
-          echo "⚡ HIGH: $HIGH lỗi × \$1,000 = \$$BOUNTY_HIGH"
-          echo "🟡 MEDIUM: $MEDIUM lỗi × \$200 = \$$BOUNTY_MEDIUM"
+          echo "🔥 CRITICAL: $CRITICAL lỗi × \$5,000 = \$${BOUNTY_CRITICAL:-0}"
+          echo "⚡ HIGH: $HIGH lỗi × \$1,000 = \$${BOUNTY_HIGH:-0}"
+          echo "🟡 MEDIUM: $MEDIUM lỗi × \$200 = \$${BOUNTY_MEDIUM:-0}"
           echo ""
-          echo "💰 TỔNG BOUNTY TIỀM NĂNG: \$$TOTAL_BOUNTY"
+          echo "💰 TỔNG BOUNTY TIỀM NĂNG: \$${TOTAL_BOUNTY:-0}"
           echo ""
           
-          # === HIỂN THỊ TOP 10 LỖI CRITICAL/HIGH ===
-          if [ $CRITICAL -gt 0 ] || [ $HIGH -gt 0 ]; then
-            echo "🔥 TOP 10 LỖI CÓ GIÁ TRỊ CAO NHẤT:"
+          # === HIỂN THỊ TOP LỖI ===
+          if [ "$TOTAL" -gt 0 ]; then
+            echo "🔥 DANH SÁCH LỖI PHÁT HIỆN:"
             echo "─────────────────────────────────────────"
-            grep -E "critical|high" results.txt 2>/dev/null | head -10
+            head -20 results.txt
           else
-            echo "✅ KHÔNG CÓ LỖI CRITICAL/HIGH"
+            echo "✅ KHÔNG CÓ LỖI NÀO"
           fi
           
           echo ""
