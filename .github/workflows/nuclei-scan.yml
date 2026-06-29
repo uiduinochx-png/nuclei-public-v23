@@ -1,4 +1,4 @@
-name: "Nuclei Engine 24/7 Pro"
+name: "Nuclei Engine 24/7 Pro - Phiên bản Di sản"
 
 on:
   workflow_dispatch:
@@ -15,12 +15,18 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Run Nuclei Scan
+      - name: 🔥 Quét Sâu Lặp (Chỉ 100 Web)
         run: |
-          echo "START SCAN: $(date)"
-          echo "TARGETS: $(cat targets.txt | wc -l) websites"
+          echo "============================================================"
+          echo "🧠 CỖ MÁY NUCLEI DI SẢN - BẮT ĐẦU QUÉT SÂU LẶP"
+          echo "============================================================"
+          echo "START TIME: $(date)"
+          echo "TARGETS: 100 websites (giảm từ 200 để quét sâu hơn)"
           echo ""
-          
+
+          # === LẦN QUÉT 1: QUÉT BÌNH THƯỜNG (LẤY DỮ LIỆU GỐC) ===
+          echo "📥 LẦN 1: QUÉT CƠ BẢN - THU THẬP DỮ LIỆU GỐC"
+          echo "------------------------------------------------------------"
           nuclei -list targets.txt \
             -severity critical,high,medium \
             -c 30 \
@@ -29,16 +35,99 @@ jobs:
             -timeout 20 \
             -retries 3 \
             -stats \
-            -json-export results.json \
-            -o results.txt \
+            -json-export raw_results.json \
+            -o raw_results.txt \
             -silent
 
-      - name: Upload Results
+          echo ""
+          echo "📊 KẾT QUẢ LẦN 1: LƯU TẠI raw_results.txt"
+
+          # === LẦN QUÉT 2: QUÉT SÂU VÀO CÁC MỤC TIÊU CÓ LỖI (GIỐNG HTTP REQUEST SHORTCUTS) ===
+          echo ""
+          echo "============================================================"
+          echo "📥 LẦN 2: QUÉT SÂU ĐỘT NHẬP - TÌM CHI TIẾT LỖI (HTTP REQUEST STYLE)"
+          echo "============================================================"
+          echo ""
+
+          # Tạo file chứa các mục tiêu đã có lỗi để quét sâu
+          if [ -f raw_results.txt ]; then
+            echo "🔍 ĐANG XÂY DỰNG DANH SÁCH MỤC TIÊU CÓ LỖI ĐỂ QUÉT SÂU..."
+            # Trích xuất domain từ raw_results.txt và lưu vào deep_targets.txt
+            grep -oP 'https?://[^/]+' raw_results.txt | sort -u > deep_targets.txt
+            echo "✅ TÌM THẤY $(cat deep_targets.txt | wc -l) MỤC TIÊU ĐỂ QUÉT SÂU"
+            echo ""
+            
+            # Nếu có mục tiêu để quét sâu
+            if [ -s deep_targets.txt ]; then
+              echo "🔥 BẮT ĐẦU QUÉT SÂU ĐỘT NHẬP TRÊN CÁC MỤC TIÊU CÓ LỖI..."
+              echo "------------------------------------------------------------"
+              nuclei -list deep_targets.txt \
+                -severity critical,high,medium,low,info \
+                -c 30 \
+                -rate-limit 100 \
+                -bulk-size 20 \
+                -timeout 20 \
+                -retries 3 \
+                -stats \
+                -json-export deep_results.json \
+                -o deep_results.txt \
+                -silent
+              echo ""
+              echo "📊 KẾT QUẢ LẦN 2 (QUÉT SÂU): LƯU TẠI deep_results.txt"
+            else
+              echo "✅ KHÔNG CÓ MỤC TIÊU CÓ LỖI ĐỂ QUÉT SÂU (CHỈ QUÉT LẦN 1)."
+              touch deep_results.txt
+              echo '[]' > deep_results.json
+            fi
+          else
+            echo "⚠️ LẦN 1 KHÔNG TÌM THẤY LỖI, BỎ QUA LẦN 2."
+            touch deep_results.txt
+            echo '[]' > deep_results.json
+          fi
+
+      - name: 📄 TẠO BÁO CÁO DI SẢN (2 PHẦN RÕ RÀNG)
+        if: always()
+        run: |
+          echo ""
+          echo "============================================================"
+          echo "📄 TẠO BÁO CÁO KẾT QUẢ ĐỘT NHẬP - 2 PHẦN"
+          echo "============================================================"
+          echo ""
+
+          # === PHẦN 1: KẾT QUẢ LẦN QUÉT 1 (CƠ BẢN) ===
+          echo "📋 PHẦN 1: KẾT QUẢ QUÉT CƠ BẢN (LẦN 1)" > FINAL_REPORT.txt
+          echo "========================================================================================================================" >> FINAL_REPORT.txt
+          if [ -f raw_results.txt ]; then
+            cat raw_results.txt >> FINAL_REPORT.txt
+          else
+            echo "✅ KHÔNG CÓ LỖI NÀO" >> FINAL_REPORT.txt
+          fi
+          echo "" >> FINAL_REPORT.txt
+          echo "========================================================================================================================" >> FINAL_REPORT.txt
+
+          # === PHẦN 2: KẾT QUẢ LẦN QUÉT 2 (SÂU ĐỘT NHẬP) ===
+          echo "" >> FINAL_REPORT.txt
+          echo "📋 PHẦN 2: KẾT QUẢ QUÉT SÂU ĐỘT NHẬP (LẦN 2 - HTTP REQUEST STYLE)" >> FINAL_REPORT.txt
+          echo "========================================================================================================================" >> FINAL_REPORT.txt
+          if [ -f deep_results.txt ] && [ -s deep_results.txt ]; then
+            cat deep_results.txt >> FINAL_REPORT.txt
+          else
+            echo "✅ KHÔNG CÓ KẾT QUẢ TỐT TRONG ĐỢT 2" >> FINAL_REPORT.txt
+          fi
+          echo "" >> FINAL_REPORT.txt
+          echo "========================================================================================================================" >> FINAL_REPORT.txt
+
+          echo "✅ BÁO CÁO DI SẢN ĐÃ ĐƯỢC TẠO: FINAL_REPORT.txt"
+
+      - name: 💾 LƯU KHO BÁU QUÝ GIÁ
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: nuclei-report-${{ github.run_id }}
+          name: nuclei-di-san-report-${{ github.run_id }}
           path: |
-            results.txt
-            results.json
-          retention-days: 14
+            raw_results.txt
+            raw_results.json
+            deep_results.txt
+            deep_results.json
+            FINAL_REPORT.txt
+          retention-days: 30
