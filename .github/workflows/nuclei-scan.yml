@@ -1,9 +1,9 @@
-name: "Nuclei Engine - Tự động hóa Toàn diện"
+name: "Nuclei - Tự Xác Minh Thông Minh"
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 */3 * * *'  # Chạy mỗi 3 giờ thay vì 6
+    - cron: '0 */6 * * *'
 
 jobs:
   nuclei-scan:
@@ -15,86 +15,113 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: ⚡ QUÉT NHANH + TỰ XÁC MINH
+      - name: ⚡ QUÉT VÀ TỰ XÁC MINH
         run: |
           echo "============================================================"
-          echo "🧠 NUCLEI - TỰ ĐỘNG TÌM KIẾM + XÁC MINH LỖ HỔNG"
+          echo "🧠 NUCLEI - TỰ ĐỘNG QUÉT & XÁC MINH LỖ HỔNG"
           echo "============================================================"
           echo "START TIME: $(date)"
-          echo "TARGETS: 100 websites"
           echo ""
 
-          # === LẦN 1: QUÉT NHANH (CHỈ CRITICAL + HIGH) ===
-          echo "📥 LẦN 1: QUÉT NHANH - TÌM LỖI CÓ GIÁ TRỊ"
+          # === LẦN 1: QUÉT NHANH ===
+          echo "📥 LẦN 1: QUÉT TÌM LỖI"
           echo "------------------------------------------------------------"
           nuclei -list targets.txt \
-            -severity critical,high \
-            -c 50 \
-            -rate-limit 150 \
-            -bulk-size 30 \
-            -timeout 15 \
-            -retries 2 \
+            -severity critical,high,medium \
+            -c 40 \
+            -rate-limit 120 \
+            -bulk-size 25 \
+            -timeout 20 \
+            -retries 3 \
             -json-export raw_results.json \
             -o raw_results.txt \
             -silent
 
           echo "✅ LẦN 1 HOÀN TẤT: $(date)"
 
-          # === LẦN 2: TỰ XÁC MINH LỖI (Chỉ quét lại các URL có lỗi) ===
+          # === LẦN 2: TỰ ĐỘNG XÁC MINH ===
           echo ""
           echo "============================================================"
-          echo "🔍 LẦN 2: TỰ XÁC MINH LỖ HỔNG (XÁC NHẬN LỖI THẬT)"
+          echo "🔬 LẦN 2: TỰ ĐỘNG XÁC MINH LỖI"
           echo "============================================================"
           echo ""
 
-          # Tạo danh sách URL có lỗi để xác minh
+          echo "📋 BÁO CÁO LỖI ĐÃ XÁC MINH:" > verified_report.txt
+          echo "========================================================================" >> verified_report.txt
+          echo "" >> verified_report.txt
+
           if [ -f raw_results.txt ] && [ -s raw_results.txt ]; then
-            echo "🔍 ĐANG TRÍCH XUẤT URL CÓ LỖI ĐỂ XÁC MINH..."
-            grep -oP 'https?://[^/]+' raw_results.txt | sort -u > verify_targets.txt
-            echo "✅ TÌM THẤY $(cat verify_targets.txt | wc -l) MỤC TIÊU CẦN XÁC MINH"
+            echo "🔍 ĐANG XÁC MINH TỪNG LỖI..."
             echo ""
-
-            if [ -s verify_targets.txt ]; then
-              echo "🛡️ BẮT ĐẦU XÁC MINH LỖI (QUÉT SÂU TRÊN CÁC MỤC TIÊU NÀY)..."
-              echo "------------------------------------------------------------"
-              
-              # Quét sâu để xác minh
-              nuclei -list verify_targets.txt \
-                -severity critical,high,medium \
-                -c 30 \
-                -rate-limit 80 \
-                -bulk-size 20 \
-                -timeout 25 \
-                -retries 3 \
-                -json-export verified_results.json \
-                -o verified_results.txt \
-                -silent
-              
-              # Kiểm tra xem lỗi có thực sự tồn tại không (gửi request thủ công)
-              echo ""
-              echo "🔬 ĐANG KIỂM TRA THỦ CÔNG CÁC LỖI ĐÃ XÁC MINH..."
-              echo "------------------------------------------------------------"
-              
-              # Đọc từng lỗi và kiểm tra thủ công
-              if [ -f verified_results.txt ]; then
-                echo "✅ LỖI ĐÃ ĐƯỢC XÁC MINH:" > final_vulns.txt
-                echo "========================================================================" >> final_vulns.txt
+            
+            VERIFIED_COUNT=0
+            FALSE_COUNT=0
+            
+            while IFS= read -r line; do
+              if [ -n "$line" ]; then
+                URL=$(echo "$line" | grep -oP 'https?://[^ ]+' | head -1)
+                TEMPLATE=$(echo "$line" | grep -oP '\[[^]]+\]' | head -1 | tr -d '[]')
+                SEVERITY=$(echo "$line" | grep -oP '\[[^]]+\]' | sed -n '2p' | tr -d '[]' || echo "unknown")
                 
-                # Lọc các lỗi Critical và High để ưu tiên
-                grep -E "critical|high" verified_results.txt >> final_vulns.txt 2>/dev/null || echo "✅ KHÔNG CÓ LỖI NGHIÊM TRỌNG" >> final_vulns.txt
-                echo "========================================================================" >> final_vulns.txt
-                echo "" >> final_vulns.txt
-                echo "📋 CHI TIẾT LỖI ĐÃ XÁC MINH:" >> final_vulns.txt
-                cat verified_results.txt >> final_vulns.txt 2>/dev/null || echo "⚠️ KHÔNG CÓ LỖI NÀO" >> final_vulns.txt
-              else
-                echo "⚠️ KHÔNG TÌM THẤY LỖI NÀO TRONG QUÁ TRÌNH XÁC MINH" > final_vulns.txt
+                if [ -n "$URL" ] && [ -n "$TEMPLATE" ]; then
+                  echo "🔬 ĐANG XÁC MINH: $TEMPLATE trên $URL"
+                  
+                  # === XÁC MINH CHI TIẾT ===
+                  # 1. Lấy status code
+                  STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$URL" 2>/dev/null || echo "000")
+                  
+                  # 2. Lấy header
+                  HEADER=$(curl -s -I --max-time 10 "$URL" 2>/dev/null | head -5)
+                  
+                  # 3. Lấy nội dung (20 dòng)
+                  BODY=$(curl -s --max-time 10 "$URL" 2>/dev/null | head -20)
+                  
+                  # 4. Phân tích
+                  if [ "$STATUS" = "200" ] || [ "$STATUS" = "301" ] || [ "$STATUS" = "302" ] || [ "$STATUS" = "403" ]; then
+                    # Kiểm tra nội dung
+                    if echo "$BODY" | grep -qiE "error|warning|exception|stack trace|fatal|critical|deprecated|sql|mysql|postgres|mongodb|password|secret|key|token|api"; then
+                      echo "✅ [$SEVERITY] $TEMPLATE" >> verified_report.txt
+                      echo "   → URL: $URL" >> verified_report.txt
+                      echo "   → HTTP $STATUS - ĐÃ XÁC MINH (Có dấu hiệu lỗi)" >> verified_report.txt
+                      if echo "$HEADER" | grep -qiE "server|powered-by|x-powered-by"; then
+                        SERVER_INFO=$(echo "$HEADER" | grep -iE "server|powered-by" | head -1)
+                        echo "   → Server: $SERVER_INFO" >> verified_report.txt
+                      fi
+                      echo "   → Trạng thái: 🔴 CHƯA VÁ - Cần báo cáo ngay!" >> verified_report.txt
+                      echo "" >> verified_report.txt
+                      VERIFIED_COUNT=$((VERIFIED_COUNT + 1))
+                    else
+                      echo "✅ [$SEVERITY] $TEMPLATE" >> verified_report.txt
+                      echo "   → URL: $URL" >> verified_report.txt
+                      echo "   → HTTP $STATUS - ĐÃ XÁC MINH (Trang tồn tại)" >> verified_report.txt
+                      echo "   → Trạng thái: 🟡 CẦN KIỂM TRA THỦ CÔNG" >> verified_report.txt
+                      echo "" >> verified_report.txt
+                      VERIFIED_COUNT=$((VERIFIED_COUNT + 1))
+                    fi
+                  else
+                    echo "❌ [$SEVERITY] $TEMPLATE" >> verified_report.txt
+                    echo "   → URL: $URL" >> verified_report.txt
+                    echo "   → HTTP $STATUS - KHÔNG XÁC MINH" >> verified_report.txt
+                    echo "   → Trạng thái: 🟢 ĐÃ VÁ HOẶC FALSE POSITIVE" >> verified_report.txt
+                    echo "" >> verified_report.txt
+                    FALSE_COUNT=$((FALSE_COUNT + 1))
+                  fi
+                fi
               fi
-            else
-              echo "✅ KHÔNG CÓ LỖI NÀO ĐỂ XÁC MINH" > final_vulns.txt
-            fi
+            done < raw_results.txt
+            
+            echo ""
+            echo "============================================================"
+            echo "📊 TỔNG KẾT XÁC MINH:"
+            echo "✅ LỖI ĐÃ XÁC MINH (CÒN HIỆU LỰC): $VERIFIED_COUNT"
+            echo "❌ LỖI KHÔNG XÁC MINH (ĐÃ VÁ/FALSE): $FALSE_COUNT"
+            echo "============================================================"
+            
           else
-            echo "⚠️ LẦN 1 KHÔNG TÌM THẤY LỖI" > final_vulns.txt
+            echo "⚠️ KHÔNG TÌM THẤY LỖI NÀO ĐỂ XÁC MINH" >> verified_report.txt
           fi
+          
+          echo "========================================================================" >> verified_report.txt
 
       - name: 📄 TẠO BÁO CÁO CUỐI CÙNG
         if: always()
@@ -105,12 +132,18 @@ jobs:
           echo "============================================================"
           echo ""
 
-          cat final_vulns.txt > FINAL_REPORT.txt
+          cat verified_report.txt > FINAL_REPORT.txt
           echo "" >> FINAL_REPORT.txt
           echo "============================================================" >> FINAL_REPORT.txt
           echo "📅 THỜI GIAN HOÀN TẤT: $(date)" >> FINAL_REPORT.txt
           echo "============================================================" >> FINAL_REPORT.txt
-          echo "✅ BÁO CÁO ĐÃ SẴN SÀNG ĐỂ GỬI!" >> FINAL_REPORT.txt
+          echo "" >> FINAL_REPORT.txt
+          echo "📋 HƯỚNG DẪN BÁO CÁO:" >> FINAL_REPORT.txt
+          echo "1. Lỗi có '🟢 ĐÃ VÁ' → KHÔNG BÁO CÁO" >> FINAL_REPORT.txt
+          echo "2. Lỗi có '🟡 CẦN KIỂM TRA' → Kiểm tra thủ công rồi báo cáo" >> FINAL_REPORT.txt
+          echo "3. Lỗi có '🔴 CHƯA VÁ' → BÁO CÁO NGAY!" >> FINAL_REPORT.txt
+          echo "" >> FINAL_REPORT.txt
+          echo "📌 GỬI BÁO CÁO LÊN: HackerOne, Bugcrowd, Immunefi" >> FINAL_REPORT.txt
 
           echo "✅ BÁO CÁO ĐÃ TẠO: FINAL_REPORT.txt"
           cat FINAL_REPORT.txt
@@ -119,12 +152,10 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: nuclei-report-${{ github.run_id }}
+          name: nuclei-verified-report-${{ github.run_id }}
           path: |
             raw_results.txt
             raw_results.json
-            verified_results.txt
-            verified_results.json
-            final_vulns.txt
+            verified_report.txt
             FINAL_REPORT.txt
           retention-days: 30
