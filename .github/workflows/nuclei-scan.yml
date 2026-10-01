@@ -1,4 +1,4 @@
-name: Nuclei 24/7 Auto Scan
+name: Nuclei 24/7 AI-Powered Scan
 
 on:
   schedule:
@@ -11,17 +11,33 @@ jobs:
     permissions:
       security-events: write
       contents: read
+      issues: write
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run Nuclei
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install openai requests
+
+      - name: Create targets.txt if missing
+        run: |
+          if [ ! -f targets.txt ]; then
+            echo "example.com" > targets.txt
+          fi
+
+      - name: Run Nuclei scan
         uses: projectdiscovery/nuclei-action@v3
         with:
           version: latest
           args: >
             -l targets.txt
-            -severity critical,high,medium,low,info,unknown
+            -severity critical,high,medium
+            -exclude-severity info,low,unknown
             -rl 150
             -c 50
             -bs 25
@@ -29,19 +45,92 @@ jobs:
             -retries 2
             -stats
             -json-export nuclei-results.json
-            -sarif-export nuclei-results.sarif
 
-      - name: Upload SARIF
-        if: always()
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: nuclei-results.sarif
-          category: nuclei-results
+      - name: AI Analysis and Report
+        if: always() && hashFiles('nuclei-results.json') != ''
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          cat > ai_analyzer.py << 'PYEOF'
+          #!/usr/bin/env python3
+          import json, os, sys
+          from datetime import datetime
+          from openai import OpenAI
 
-      - name: Upload Artifact
+          def load_findings(fp):
+              out = []
+              try:
+                  with open(fp) as f:
+                      for line in f:
+                          if line.strip():
+                              try: out.append(json.loads(line))
+                              except: pass
+              except: pass
+              return out
+
+          def analyze(findings):
+              client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+              summary = []
+              for f in findings:
+                  summary.append({
+                      'template': f.get('template-id',''),
+                      'severity': f.get('info',{}).get('severity',''),
+                      'name': f.get('info',{}).get('name',''),
+                      'host': f.get('host',''),
+                      'matched': f.get('matched-at',''),
+                      'desc': f.get('info',{}).get('description','')[:200]
+                  })
+              prompt = f"""Bạn là chuyên gia bảo mật cấp cao. Phân tích danh sách lỗ hổng từ Nuclei.
+          Nhiệm vụ:
+          1. Chỉ giữ lỗi có GIÁ TRỊ THỰC SỰ (critical/high/medium)
+          2. Loại bỏ nhiễu, false positive
+          3. Đánh giá mức độ thực tế (1-10), khả năng khai thác, tác động, hướng xác minh
+          Dữ liệu:
+          {json.dumps(summary, indent=2, ensure_ascii=False)}
+          Trả về JSON:
+          {{"valid_findings":[{{"template":"","host":"","severity":"","real_score":0,"exploitability":"","impact":"","verification":""}}],"discarded":[{{"template":"","reason":""}}]}}"""
+              r = client.chat.completions.create(
+                  model="gpt-4o-mini",
+                  messages=[{"role":"user","content":prompt}],
+                  temperature=0.2
+              )
+              return json.loads(r.choices[0].message.content)
+
+          def report(a, findings):
+              out = f"# BÁO CÁO LỖ HỔNG - {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n"
+              out += f"## TỔNG QUAN\n\n- Ban đầu: {len(findings)}\n"
+              out += f"- Có giá trị: {len(a.get('valid_findings',[]))}\n"
+              out += f"- Loại bỏ: {len(a.get('discarded',[]))}\n\n## LỖI CÓ GIÁ TRỊ\n\n"
+              for i, f in enumerate(a.get('valid_findings',[]),1):
+                  out += f"### {i}. {f.get('template','')}\n\n"
+                  out += f"- **Host:** {f.get('host','')}\n"
+                  out += f"- **Mức độ:** {f.get('severity','')}\n"
+                  out += f"- **Điểm thực:** {f.get('real_score','')}/10\n"
+                  out += f"- **Khai thác:** {f.get('exploitability','')}\n"
+                  out += f"- **Tác động:** {f.get('impact','')}\n"
+                  out += f"- **Xác minh:** {f.get('verification','')}\n\n---\n\n"
+              if a.get('discarded'):
+                  out += "## LỖI BỊ LOẠI\n\n"
+                  for d in a.get('discarded',[]):
+                      out += f"- {d.get('template','')}: {d.get('reason','')}\n"
+              return out
+
+          if __name__ == '__main__':
+              if len(sys.argv) < 2: sys.exit(1)
+              findings = load_findings(sys.argv[1])
+              if not findings:
+                  open('report.md','w').write('# BÁO CÁO\n\nKhông có lỗi.\n')
+                  sys.exit(0)
+              a = analyze(findings)
+              open('report.md','w',encoding='utf-8').write(report(a, findings))
+              print(f"Report: {len(a.get('valid_findings',[]))} lỗi")
+          PYEOF
+          python3 ai_analyzer.py nuclei-results.json
+
+      - name: Upload Report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: nuclei-results
-          path: nuclei-results.json
+          name: security-report
+          path: report.md
           retention-days: 30
